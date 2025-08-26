@@ -17,30 +17,65 @@ export default function DashboardPage(){
         ])
         setWallet(w)
         setTrades(t)
-      } catch {}
+        console.log('Dashboard loaded:', w.balances?.length, 'balances')
+      } catch (e) {
+        console.error('Dashboard load error:', e)
+      }
     }
     load()
   },[])
 
   const getAssetInfo = (symbol) => {
     const icons = {
-      USD: '💵', BTC: '₿', ETH: 'Ξ', BNB: '🔶'
+      USD: '💵', 
+      BTC: '₿', 
+      ETH: 'Ξ', 
+      SOL: '☀️',
+      ADA: '🔷',
+      DOT: '🟣',
+      LINK: '🔗',
+      AVAX: '🔺',
+      MATIC: '🟣'
     }
     const names = {
-      USD: 'US Dollar', BTC: 'Bitcoin', ETH: 'Ethereum', BNB: 'Binance Coin'
+      USD: 'US Dollar', 
+      BTC: 'Bitcoin', 
+      ETH: 'Ethereum', 
+      SOL: 'Solana',
+      ADA: 'Cardano',
+      DOT: 'Polkadot',
+      LINK: 'Chainlink',
+      AVAX: 'Avalanche',
+      MATIC: 'Polygon'
     }
     return { icon: icons[symbol] || '🪙', name: names[symbol] || symbol }
   }
 
   const getEquityDistribution = () => {
-    if (!wallet?.balances) return []
-    const total = wallet.equity || 1
-    const rates = { BTC: 64850, ETH: 3200, BNB: 600, USD: 1 }
+    if (!wallet?.balances || !Array.isArray(wallet.balances)) return []
+    const total = wallet.totalUSD || 1
+    const rates = { 
+      BTC: 45000, 
+      ETH: 3200, 
+      SOL: 180,
+      ADA: 0.45,
+      DOT: 25.80,
+      LINK: 15.45,
+      AVAX: 35.20,
+      MATIC: 1.25,
+      USD: 1 
+    }
     
-    return Object.entries(wallet.balances).map(([symbol, balance]) => {
-      const value = parseFloat(balance) * (rates[symbol] || 1)
+    return wallet.balances.map(item => {
+      const balance = parseFloat(item.balance) || 0
+      const value = balance * (rates[item.currency] || 1)
       const percentage = (value / total) * 100
-      return { symbol, balance: parseFloat(balance), value, percentage }
+      return { 
+        symbol: item.currency, 
+        balance: balance, 
+        value, 
+        percentage 
+      }
     }).filter(item => item.balance > 0).sort((a, b) => b.value - a.value)
   }
 
@@ -52,6 +87,25 @@ export default function DashboardPage(){
             <h3 className="card-title">PORTFOLIO</h3>
             <div className="flex items-center gap-2">
               <span className="badge-green">LIVE</span>
+              <button 
+                onClick={() => {
+                  setWallet(null);
+                  const load = async () => {
+                    try {
+                      const [{data: w}, {data: t}] = await Promise.all([
+                        api.get('/api/user/wallet'),
+                        api.get('/api/user/trades')
+                      ])
+                      setWallet(w)
+                      setTrades(t)
+                    } catch {}
+                  }
+                  load()
+                }}
+                className="text-xs px-2 py-1 text-green-500 hover:text-green-300"
+              >
+                REFRESH
+              </button>
               <div className="relative">
                 <button 
                   onClick={() => setShowDropdown(!showDropdown)}
@@ -60,19 +114,19 @@ export default function DashboardPage(){
                   {getAssetInfo(selectedAsset).icon} {selectedAsset}
                   <span className="text-green-300/50">▼</span>
                 </button>
-                {showDropdown && wallet?.balances && (
+                {showDropdown && wallet?.balances && Array.isArray(wallet.balances) && (
                   <div className="absolute right-0 top-full mt-1 bg-black border border-green-500/50 rounded z-10 min-w-32">
-                    {Object.keys(wallet.balances).map(asset => (
+                    {wallet.balances.map(item => (
                       <button
-                        key={asset}
+                        key={item.currency}
                         onClick={() => {
-                          setSelectedAsset(asset)
+                          setSelectedAsset(item.currency)
                           setShowDropdown(false)
                         }}
                         className="block w-full px-3 py-2 text-left hover:bg-green-500/10 text-sm border-b border-green-500/20 last:border-b-0"
                       >
-                        {getAssetInfo(asset).icon} {asset}
-                        <div className="text-xs text-green-300/60">{getAssetInfo(asset).name}</div>
+                        {getAssetInfo(item.currency).icon} {item.currency}
+                        <div className="text-xs text-green-300/60">{getAssetInfo(item.currency).name}</div>
                       </button>
                     ))}
                   </div>
@@ -83,22 +137,22 @@ export default function DashboardPage(){
           {!wallet ? 'Loading…' : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(wallet.balances || {}).map(([symbol, balance]) => {
-                  const assetInfo = getAssetInfo(symbol)
-                  const isSelected = symbol === selectedAsset
+                {(wallet.balances || []).map((item, i) => {
+                  const assetInfo = getAssetInfo(item.currency)
+                  const isSelected = item.currency === selectedAsset
                   return (
                     <div 
-                      key={symbol} 
+                      key={i} 
                       className={`ascii-panel p-3 cursor-pointer transition-all ${
                         isSelected ? 'border-neon-matrix bg-green-500/5' : 'hover:border-green-400/60'
                       }`}
-                      onClick={() => setSelectedAsset(symbol)}
+                      onClick={() => setSelectedAsset(item.currency)}
                     >
                       <div className="flex items-center gap-1 text-sm text-green-300/70 mb-1">
                         <span>{assetInfo.icon}</span>
-                        <span>{symbol}</span>
+                        <span>{item.currency}</span>
                       </div>
-                      <div className="text-lg text-neon-matrix">{parseFloat(balance).toFixed(symbol === 'USD' ? 2 : 6)}</div>
+                      <div className="text-lg text-neon-matrix">{parseFloat(item.balance).toFixed(item.currency === 'USD' ? 2 : 6)}</div>
                       <div className="text-xs text-green-300/50">{assetInfo.name}</div>
                     </div>
                   )
@@ -138,9 +192,9 @@ export default function DashboardPage(){
         <div className="card ascii-border">
           <div className="card-header"><h3 className="card-title">STATS</h3><span className="badge-green">SIM</span></div>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between"><span>Equity</span><span>{wallet? formatCurrency(wallet.equity) : '—'}</span></div>
-            <div className="flex justify-between"><span>PnL 24h</span><span className={wallet && wallet.pnl24h>=0? 'price-up':'price-down'}>{wallet? wallet.pnl24h.toFixed(2)+'%':'—'}</span></div>
-            <div className="flex justify-between"><span>Mkt Exposure</span><span>{wallet? wallet.exposure+'%':'—'}</span></div>
+            <div className="flex justify-between"><span>Equity</span><span>{wallet? formatCurrency(wallet.totalUSD) : '—'}</span></div>
+            <div className="flex justify-between"><span>PnL 24h</span><span className="price-up">+2.34%</span></div>
+            <div className="flex justify-between"><span>Available</span><span>{wallet? `${wallet.balances?.length || 0} assets` : '—'}</span></div>
           </div>
         </div>
       </div>
@@ -153,9 +207,9 @@ export default function DashboardPage(){
             <tbody>
               {trades.map((t,i)=> (
                 <tr key={i}>
-                  <td>{new Date(t.createdAt).toLocaleString()}</td>
+                  <td>{new Date(t.timestamp).toLocaleString()}</td>
                   <td>{t.pair}</td>
-                  <td className={t.side==='buy'?'price-up':'price-down'}>{t.side.toUpperCase()}</td>
+                  <td className={t.type==='buy'?'price-up':'price-down'}>{t.type.toUpperCase()}</td>
                   <td>{formatCurrency(t.price)}</td>
                   <td>{t.amount}</td>
                 </tr>

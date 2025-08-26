@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import api from '../../services/api.js'
 import { generateOrderBook } from '../../utils/helpers.js'
+import { useMarket } from '../../contexts/MarketContext'
 
 export default function OrderBook({ compact=false, pair = 'BTC/USD' }) {
   const [book, setBook] = useState({ bids: [], asks: [] })
   const [loading, setLoading] = useState(true)
+  const { getCurrentPrice } = useMarket()
 
   useEffect(() => {
     fetchOrderBook()
@@ -21,8 +23,8 @@ export default function OrderBook({ compact=false, pair = 'BTC/USD' }) {
       setLoading(false)
     } catch (error) {
       console.error('Error fetching order book:', error)
-      // Fallback to generated data
-      setBook(generateOrderBook())
+      // Fallback to generated data with current market price
+      setBook(generateOrderBook(getCurrentPrice(pair)))
       setLoading(false)
     }
   }

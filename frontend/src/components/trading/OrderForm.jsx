@@ -19,7 +19,10 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
       fetchMarkets()
       fetchOrderBook()
       if (authService.isAuthenticated()) {
+        console.log('User authenticated, fetching wallet balances...')
         fetchWalletBalances()
+      } else {
+        console.log('User not authenticated')
       }
     }
     initializeData()
@@ -57,9 +60,17 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
   const fetchWalletBalances = async () => {
     try {
       const { data } = await api.get('/api/user/wallet')
-      setWallets(data.balances || {})
+      // Convert array of balances to object for easier lookup
+      const walletsObj = {}
+      if (data.balances && Array.isArray(data.balances)) {
+        data.balances.forEach(item => {
+          walletsObj[item.currency] = parseFloat(item.balance) || 0
+        })
+      }
+      setWallets(walletsObj)
     } catch (error) {
       console.error('Error fetching wallet balances:', error)
+      setWallets({})
     }
   }
 
@@ -88,6 +99,8 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
     const amount = parseFloat(form.amount)
     const price = form.type === 'market' ? getMarketPrice() : parseFloat(form.price)
     
+    console.log('Validating order:', { base, quote, amount, price, side: form.side, wallets })
+    
     if (!amount || amount <= 0) {
       setStatus('❌ Invalid amount')
       return false
@@ -107,20 +120,25 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
 
     // Check balance based on order side
     if (form.side === 'buy') {
+      // Buying: need quote currency (USD) to buy base currency (BTC/SOL/etc)
       const requiredBalance = amount * price
       const quoteBalance = wallets[quote] || 0
-      if (quoteBalance < requiredBalance) {
-        setStatus(`❌ Insufficient ${quote} balance (need ${requiredBalance.toFixed(2)}, have ${quoteBalance.toFixed(2)})`)
+      console.log(`Buy order: need ${requiredBalance.toFixed(2)} ${quote}, have ${parseFloat(quoteBalance).toFixed(2)} ${quote}`)
+      if (parseFloat(quoteBalance) < requiredBalance) {
+        setStatus(`❌ Insufficient ${quote} balance (need ${requiredBalance.toFixed(2)}, have ${parseFloat(quoteBalance).toFixed(2)})`)
         return false
       }
     } else {
+      // Selling: need base currency (BTC/SOL/etc) to sell for quote currency (USD)
       const baseBalance = wallets[base] || 0
-      if (baseBalance < amount) {
-        setStatus(`❌ Insufficient ${base} balance (need ${amount}, have ${baseBalance})`)
+      console.log(`Sell order: need ${amount} ${base}, have ${parseFloat(baseBalance)} ${base}`)
+      if (parseFloat(baseBalance) < amount) {
+        setStatus(`❌ Insufficient ${base} balance (need ${amount}, have ${parseFloat(baseBalance)})`)
         return false
       }
     }
 
+    setStatus('✅ Order validation passed')
     return true
   }
 
@@ -226,17 +244,21 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
         <button className="ascii-btn col-span-2 py-2 glow" disabled={loading}>{loading?'SENDING…':'PLACE ORDER'}</button>
         
         {/* Wallet Balance Display */}
-        {Object.keys(wallets).length > 0 && (
+        {Object.keys(wallets).length > 0 ? (
           <div className="col-span-2 pt-2 border-t border-green-500/30 mt-2">
             <div className="text-xs text-green-300/70 mb-1">WALLET BALANCE</div>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries(wallets).map(([currency, balance]) => (
                 <div key={currency} className="text-xs">
                   <span className="text-green-300">{currency}:</span> 
-                  <span className="text-neon-matrix ml-1">{parseFloat(balance).toFixed(6)}</span>
+                  <span className="text-neon-matrix ml-1">{parseFloat(balance).toFixed(currency === 'USD' ? 2 : 6)}</span>
                 </div>
               ))}
             </div>
+          </div>
+        ) : (
+          <div className="col-span-2 pt-2 border-t border-green-500/30 mt-2">
+            <div className="text-xs text-green-300/50">Loading wallet balance...</div>
           </div>
         )}
         

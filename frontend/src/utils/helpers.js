@@ -16,8 +16,8 @@ export function subscribeTickers(cb){
 
 export function generateOrderBook(center=45000){
   const rand = (min,max) => Math.random()*(max-min)+min
-  const bids = Array.from({length: 16}, () => ({ price: center - rand(0, 150), amount: rand(0.01, 0.8) }))
-  const asks = Array.from({length: 16}, () => ({ price: center + rand(0, 150), amount: rand(0.01, 0.8) }))
+  const bids = Array.from({length: 16}, () => ({ price: center - rand(0, 50), amount: rand(0.01, 0.8) }))
+  const asks = Array.from({length: 16}, () => ({ price: center + rand(0, 50), amount: rand(0.01, 0.8) }))
   bids.sort((a,b)=> b.price-a.price)
   asks.sort((a,b)=> a.price-b.price)
   return { bids, asks }

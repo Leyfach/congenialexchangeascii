@@ -13,6 +13,7 @@ import OrderBook from './components/trading/OrderBook.jsx'
 import { authService } from './services/auth.js'
 import MatrixBackground from './components/common/MatrixBackground.jsx'
 import TokenFixer from './components/auth/TokenFixer.jsx'
+import { MarketProvider } from './contexts/MarketContext.jsx'
 import { useState } from 'react'
 
 function ProtectedRoute({ children }) {
@@ -30,12 +31,13 @@ function ProtectedRoute({ children }) {
 
 export default function App() {
   return (
-    <div className="min-h-screen font-mono bg-black text-neon-matrix relative">
-      <MatrixBackground />
-      <div className="relative z-10">
-        <Header />
-        <Navbar />
-        <main className="px-4 md:px-8 lg:px-12 py-6">
+    <MarketProvider>
+      <div className="min-h-screen font-mono bg-black text-neon-matrix relative">
+        <MatrixBackground />
+        <div className="relative z-10">
+          <Header />
+          <Navbar />
+          <main className="px-4 md:px-8 lg:px-12 py-6">
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
@@ -51,5 +53,6 @@ export default function App() {
       </div>
       <div className="scanline" />
     </div>
+    </MarketProvider>
   )
 }

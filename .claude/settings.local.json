@@ -10,7 +10,8 @@
       "Bash(curl:*)",
       "Bash(taskkill:*)",
       "Bash(powershell:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

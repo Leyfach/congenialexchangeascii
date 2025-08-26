@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NEON DEX — ASCII Matrix UI</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --fg: #a8ff60;
+      --fg-dim: #5cff67cc;
+      --accent: #00ff9c;
+      --danger: #ff3579;
+      --warn: #ffd166;
+      --ok: #7fff7f;
+      --muted: #5cff67aa;
+      --grid-gap: 10px;
+    }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow: hidden;
+    }
+
+    /* Matrix rain background */
+    #matrix-bg {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.18;
+      filter: contrast(120%);
+    }
+
+    /* Layout */
+    .app { position: relative; z-index: 1; height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+    header, footer { padding: 8px 12px; }
+    main { padding: 8px 12px; height: 100%; box-sizing: border-box; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 320px 1fr 360px;
+      grid-auto-rows: minmax(120px, auto);
+      gap: var(--grid-gap);
+      height: calc(100% - 8px);
+    }
+    @media (max-width: 1200px) { .grid { grid-template-columns: 280px 1fr 320px; } }
+    @media (max-width: 980px)  { .grid { grid-template-columns: 1fr; overflow: auto; height: auto; } body { overflow: auto; } }
+
+    /* ASCII panel */
+    .panel {
+      position: relative;
+      padding: 12px 12px 10px 12px;
+      background: #001503;
+      box-shadow: 0 0 0 1px var(--muted) inset, 0 0 24px #00ff7a33 inset;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .panel::before, .panel::after {
+      content: "";
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        linear-gradient( to right, var(--muted) 0 2px, transparent 2px calc(100% - 2px), var(--muted) calc(100% - 2px) 100% ),
+        linear-gradient( to bottom, var(--muted) 0 2px, transparent 2px calc(100% - 2px), var(--muted) calc(100% - 2px) 100% );
+      mix-blend-mode: screen; opacity: 0.35;
+    }
+    .panel.ascii { padding-top: 20px; }
+    .panel.ascii > .ascii-frame { position: absolute; inset: 6px; color: var(--fg-dim); white-space: pre; pointer-events: none; }
+
+    .title { font-weight: 700; letter-spacing: 0.04em; margin-bottom: 8px; color: var(--accent); }
+    .subtle { color: var(--muted); }
+    .row { display: flex; align-items: center; gap: 8px; }
+
+    /* Forms */
+    input, select, button, textarea {
+      background: #001a05; color: var(--fg); border: 1px solid var(--muted);
+      padding: 6px 8px; border-radius: 2px; font: inherit; outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    button { cursor: pointer; }
+    .btn {
+      background: #00240a; border: 1px solid var(--accent);
+      padding: 6px 10px; font-weight: 700; letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn.warn { border-color: var(--warn); }
+    .btn.danger { border-color: var(--danger); }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 4px 6px; text-align: right; }
+    th { color: var(--accent); font-weight: 600; border-bottom: 1px dashed var(--muted); }
+    tr:nth-child(odd) td { background: #001706; }
+    tr:nth-child(even) td { background: #001204; }
+
+    /* Scrollers */
+    .scroll { overflow: auto; max-height: 420px; }
+    .vfill { height: calc(100% - 24px); }
+
+    /* Header ASCII */
+    .logo { white-space: pre; line-height: 1.05; color: var(--ok); text-shadow: 0 0 8px #00ff7a66; }
+    .blink { animation: blink 1s steps(2, jump-none) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .hint { font-size: 12px; color: var(--muted); }
+    .kbd { border: 1px solid var(--muted); padding: 0 4px; border-radius: 2px; }
+
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--muted), transparent); margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <canvas id="matrix-bg"></canvas>
+  <div class="app" id="app">
+    <header>
+<pre class="logo">  _   _  _____  _____  _   _      ____  _____  __   __  _____   __  __   _    __
+ | \ | || ____|| ____|| \ | |    |  _ \| ____| \ \ / / | ____| |  \/  | / \  / _\
+ |  \| ||  _|  |  _|  |  \| |____| | | |  _|    \ V /  |  _|   | |\/| |/ _ \ \ \ 
+ | |\  || |___ | |___ | |\  |_____| |_| | |___    | |   | |___  | |  | / ___ \_\ \
+ |_| \_||_____||_____||_| \_|     |____/|_____|   |_|   |_____| |_|  |_/_/   \___/
+</pre>
+      <div class="row" style="justify-content: space-between;">
+        <div class="hint">ASCII Matrix DEX UI  ░ build: <span id="build"></span> ░</div>
+        <div class="row">
+          <label class="hint" for="apiBase">API</label>
+          <input id="apiBase" placeholder="http://localhost:8080" size="28" />
+          <button class="btn" id="saveApi">Save</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+    </header>
+
+    <main>
+      <div class="grid">
+        <!-- Markets -->
+        <section class="panel ascii" id="marketsPanel">
+          <div class="ascii-frame">+-------------------------------- MARKETS ---------------------------------+</div>
+          <div class="title">[ Markets ]</div>
+          <div class="row" style="margin-bottom:8px;">
+            <input id="search" placeholder="filter: e.g. BTC/USDT" style="flex:1;">
+            <button class="btn" id="reloadMarkets">Reload</button>
+          </div>
+          <div class="scroll vfill" id="markets"></div>
+        </section>
+
+        <!-- Center: Ticker / Order form / Book -->
+        <section class="panel ascii" id="centerPanel">
+          <div class="ascii-frame">+------------------------------- TICKER & ORDERS ---------------------------+</div>
+          <div class="row" style="gap:16px; align-items:flex-start; flex-wrap:wrap;">
+            <div style="min-width:240px; flex:1 1 260px;">
+              <div class="title">[ Ticker ] <span id="symbol" class="subtle"></span></div>
+              <div id="ticker" class="subtle">—</div>
+              <div class="divider"></div>
+              <div class="title">[ Place Order ]</div>
+              <div class="row" style="gap:6px; margin-bottom:6px;">
+                <select id="side">
+                  <option>BUY</option>
+                  <option>SELL</option>
+                </select>
+                <select id="otype">
+                  <option>LIMIT</option>
+                  <option>MARKET</option>
+                </select>
+              </div>
+              <div class="row" style="gap:6px; margin-bottom:6px;">
+                <input id="price" placeholder="price" inputmode="decimal" />
+                <input id="size" placeholder="size" inputmode="decimal" />
+              </div>
+              <div class="row" style="gap:6px;">
+                <button class="btn" id="submitOrder">Send</button>
+                <button class="btn warn" id="cancelAll">Cancel All</button>
+              </div>
+              <div class="hint" id="orderHint" style="margin-top:6px;">status: —</div>
+            </div>
+            <div style="min-width:320px; flex:2 1 420px;">
+              <div class="title">[ Order Book ]</div>
+              <div class="row" style="gap:6px; margin-bottom:6px;">
+                <label class="hint">Auto-refresh</label>
+                <input type="checkbox" id="autoBook" checked>
+                <label class="hint">1s</label>
+                <button class="btn" id="reloadBook">Manual Reload</button>
+              </div>
+              <div class="row" style="gap:16px;">
+                <div style="flex:1;">
+                  <div class="subtle">Asks ▲</div>
+                  <div class="scroll" style="max-height:300px;">
+                    <table id="asks"><thead><tr><th>Price</th><th>Size</th></tr></thead><tbody></tbody></table>
+                  </div>
+                </div>
+                <div style="flex:1;">
+                  <div class="subtle">Bids ▼</div>
+                  <div class="scroll" style="max-height:300px;">
+                    <table id="bids"><thead><tr><th>Price</th><th>Size</th></tr></thead><tbody></tbody></table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right: Trades / My Orders -->
+        <section class="panel ascii" id="rightPanel">
+          <div class="ascii-frame">+----------------------------- TRADES & MY ORDERS --------------------------+</div>
+          <div class="title">[ Recent Trades ]</div>
+          <div class="row" style="gap:6px; margin-bottom:6px;">
+            <label class="hint">Auto-refresh</label>
+            <input type="checkbox" id="autoTrades" checked>
+            <label class="hint">1s</label>
+            <button class="btn" id="reloadTrades">Manual Reload</button>
+          </div>
+          <div class="scroll" style="max-height:220px;">
+            <table id="trades"><thead><tr><th style="text-align:left">Time</th><th>Price</th><th>Size</th><th>Side</th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="divider"></div>
+          <div class="title">[ My Orders ]</div>
+          <div class="scroll" style="max-height:220px;">
+            <table id="myorders"><thead><tr><th style="text-align:left">ID</th><th>Side</th><th>Type</th><th>Px</th><th>Sz</th><th>Filled</th><th>▢</th></tr></thead><tbody></tbody></table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <div class="hint">Shortcuts ▸ <span class="kbd">/</span> focus search · <span class="kbd">R</span> reload book · <span class="kbd">T</span> reload trades · <span class="kbd">M</span> reload markets</div>
+    </footer>
+  </div>
+
+  <script>
+  // ------------------------- CONFIG -------------------------
+  const API = {
+    get base() { return localStorage.getItem('apiBase') || 'http://localhost:8080'; },
+    set base(v) { localStorage.setItem('apiBase', v); },
+    markets() { return `${this.base}/markets`; },
+    ticker(sym) { return `${this.base}/ticker?symbol=${encodeURIComponent(sym)}`; },
+    orderbook(sym, limit=25) { return `${this.base}/orderbook?symbol=${encodeURIComponent(sym)}&limit=${limit}`; },
+    trades(sym, limit=50) { return `${this.base}/trades?symbol=${encodeURIComponent(sym)}&limit=${limit}`; },
+    orders() { return `${this.base}/orders`; },
+    cancel(id) { return `${this.base}/orders/${id}`; },
+    balances() { return `${this.base}/balances`; },
+  };
+
+  /*
+   Expected backend (example):
+   - GET  /markets                        -> [{ symbol: "BTC/USDT", base: "BTC", quote: "USDT" }, ...]
+   - GET  /ticker?symbol=BTC/USDT         -> { price: "63420.12", change24h: 1.23, high24h: "...", low24h: "...", volume24h: "..." }
+   - GET  /orderbook?symbol=BTC/USDT&limit=25 -> { bids:[[px,sz],...], asks:[[px,sz],...] }
+   - GET  /trades?symbol=BTC/USDT&limit=50-> [{ time: isoOrEpoch, price: "...", size: "...", side: "buy"|"sell" }, ...]
+   - POST /orders { symbol, side, type, price?, size } -> { id, status }
+   - DELETE /orders/:id                   -> { ok:true }
+   - GET  /orders                         -> [{ id, symbol, side, type, price, size, filled, status }, ...]
+  */
+
+  // ------------------------- MATRIX BACKGROUND -------------------------
+  (function matrix() {
+    const cvs = document.getElementById('matrix-bg');
+    const ctx = cvs.getContext('2d');
+    let w, h, cols, drops, fontSize = 14; // character cell size
+    const chars = '01░▒▓┃┇┊╎╏╌╍─━▁▂▃▄▅▆▇█';
+
+    function resize() {
+      w = cvs.width = window.innerWidth; h = cvs.height = window.innerHeight;
+      cols = Math.floor(w / fontSize);
+      drops = Array(cols).fill(0).map(() => Math.floor(Math.random() * -50));
+      ctx.font = `${fontSize}px monospace`;
+    }
+    window.addEventListener('resize', resize); resize();
+
+    function step() {
+      ctx.fillStyle = 'rgba(0, 8, 0, 0.15)';
+      ctx.fillRect(0,0,w,h);
+      for (let i=0;i<drops.length;i++) {
+        const ch = chars[(Math.random()*chars.length)|0];
+        ctx.fillStyle = i % 9 === 0 ? '#ccffcc' : '#44ff77';
+        ctx.fillText(ch, i*fontSize, drops[i]*fontSize);
+        if (Math.random() > 0.975 || drops[i]*fontSize > h) drops[i] = 0;
+        drops[i]++;
+      }
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  })();
+
+  // ------------------------- DOM HELPERS -------------------------
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  const fmt = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 8 });
+  const nowHHMMSS = t => {
+    const d = t ? new Date(t) : new Date();
+    return d.toLocaleTimeString([], {hour12:false});
+  };
+
+  function withTimeout(ms, signal) {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort('timeout'), ms);
+    signal?.addEventListener('abort', () => ctrl.abort('outer abort')); 
+    return ctrl;
+  }
+
+  async function jget(url, { timeout=4000 } = {}) {
+    const outer = new AbortController();
+    const t = withTimeout(timeout, outer);
+    try {
+      const res = await fetch(url, { signal: t.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      console.warn('GET failed', url, e);
+      throw e;
+    } finally { clearTimeout(t); outer.abort(); }
+  }
+
+  async function jpost(url, body, { timeout=5000 } = {}) {
+    const outer = new AbortController();
+    const t = withTimeout(timeout, outer);
+    try {
+      const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body), signal: t.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) { console.warn('POST failed', url, e); throw e; }
+    finally { clearTimeout(t); outer.abort(); }
+  }
+
+  async function jdel(url, { timeout=4000 } = {}) {
+    const outer = new AbortController();
+    const t = withTimeout(timeout, outer);
+    try {
+      const res = await fetch(url, { method:'DELETE', signal: t.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) { console.warn('DELETE failed', url, e); throw e; }
+    finally { clearTimeout(t); outer.abort(); }
+  }
+
+  // ------------------------- STATE -------------------------
+  const State = {
+    symbol: null,
+    markets: [],
+    timers: { book: null, trades: null },
+  };
+
+  function setSymbol(sym) {
+    State.symbol = sym;
+    $('#symbol').textContent = sym ? `(${sym})` : '';
+  }
+
+  // ------------------------- RENDERERS -------------------------
+  function renderMarkets(list) {
+    const q = ($('#search').value || '').trim().toLowerCase();
+    const filtered = list.filter(m => !q || m.symbol.toLowerCase().includes(q));
+    const el = $('#markets');
+    el.innerHTML = '';
+    const ul = document.createElement('div');
+    filtered.forEach(m => {
+      const a = document.createElement('div');
+      a.className = 'row';
+      a.style.justifyContent = 'space-between';
+      a.style.cursor = 'pointer';
+      a.style.padding = '4px 6px';
+      a.title = 'Select market';
+      a.innerHTML = `<span>${m.symbol}</span><span class="subtle">${m.base}/${m.quote}</span>`;
+      a.addEventListener('click', () => {
+        setSymbol(m.symbol);
+        loadAll();
+      });
+      ul.appendChild(a);
+    });
+    if (!filtered.length) {
+      const d = document.createElement('div');
+      d.className = 'subtle';
+      d.textContent = 'no markets';
+      ul.appendChild(d);
+    }
+    el.appendChild(ul);
+  }
+
+  function renderTicker(t) {
+    const el = $('#ticker');
+    if (!t) { el.textContent = '—'; return; }
+    const ch = (t.change24h ?? 0);
+    const sign = ch > 0 ? '+' : '';
+    const color = ch > 0 ? 'var(--ok)' : (ch < 0 ? 'var(--danger)' : 'var(--fg)');
+    el.innerHTML = `price: <b style="color:${color}">${fmt(t.price)}</b>  |  24h: <b style="color:${color}">${sign}${fmt(ch)}%</b>  |  H/L: ${fmt(t.high24h)} / ${fmt(t.low24h)}  |  vol24h: ${fmt(t.volume24h)}`;
+  }
+
+  function renderBook(book) {
+    const asksBody = $('#asks tbody');
+    const bidsBody = $('#bids tbody');
+    asksBody.innerHTML = ''; bidsBody.innerHTML = '';
+    if (!book) return;
+    const asks = (book.asks || []).slice().sort((a,b)=>a[0]-b[0]);
+    const bids = (book.bids || []).slice().sort((a,b)=>b[0]-a[0]);
+
+    asks.forEach(([p,s]) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${fmt(p)}</td><td>${fmt(s)}</td>`;
+      asksBody.appendChild(tr);
+    });
+    bids.forEach(([p,s]) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${fmt(p)}</td><td>${fmt(s)}</td>`;
+      bidsBody.appendChild(tr);
+    });
+  }
+
+  function renderTrades(trades) {
+    const body = $('#trades tbody');
+    body.innerHTML = '';
+    (trades||[]).forEach(t => {
+      const tr = document.createElement('tr');
+      const c = t.side === 'buy' ? 'var(--ok)' : (t.side === 'sell' ? 'var(--danger)' : 'var(--fg)');
+      tr.innerHTML = `<td style="text-align:left">${nowHHMMSS(t.time)}</td><td>${fmt(t.price)}</td><td>${fmt(t.size)}</td><td style="color:${c}">${t.side||'-'}</td>`;
+      body.appendChild(tr);
+    });
+  }
+
+  function renderMyOrders(orders) {
+    const body = $('#myorders tbody');
+    body.innerHTML = '';
+    (orders||[]).forEach(o => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="text-align:left">${o.id}</td><td>${o.side}</td><td>${o.type}</td><td>${fmt(o.price||0)}</td><td>${fmt(o.size||0)}</td><td>${fmt(o.filled||0)}</td><td><button class="btn danger" data-id="${o.id}">X</button></td>`;
+      body.appendChild(tr);
+    });
+    body.querySelectorAll('button[data-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try { await jdel(API.cancel(btn.dataset.id)); loadMyOrders(); } catch (_) {}
+      });
+    });
+  }
+
+  // ------------------------- LOADERS -------------------------
+  async function loadMarkets() {
+    try {
+      const list = await jget(API.markets());
+      State.markets = list;
+      renderMarkets(list);
+      if (!State.symbol && list.length) { setSymbol(list[0].symbol); }
+    } catch (e) {
+      // Fallback demo data
+      const list = [
+        { symbol:'BTC/USDT', base:'BTC', quote:'USDT' },
+        { symbol:'ETH/USDT', base:'ETH', quote:'USDT' },
+        { symbol:'SOL/USDT', base:'SOL', quote:'USDT' },
+        { symbol:'BONK/USDT', base:'BONK', quote:'USDT' },
+      ];
+      State.markets = list; renderMarkets(list); if (!State.symbol) setSymbol(list[0].symbol);
+    }
+  }
+
+  async function loadTicker() {
+    if (!State.symbol) return;
+    try { renderTicker(await jget(API.ticker(State.symbol))); }
+    catch (_) { renderTicker({ price: 123.45, change24h: 0.0, high24h: 130, low24h: 120, volume24h: 4200 }); }
+  }
+
+  async function loadBook() {
+    if (!State.symbol) return;
+    try { renderBook(await jget(API.orderbook(State.symbol, 25))); }
+    catch (_) { // demo book
+      const px = 100 + Math.random()*2; const asks=[], bids=[];
+      for (let i=0;i<25;i++){ asks.push([px+i*0.1, Math.random()*3]); bids.push([px-i*0.1, Math.random()*3]); }
+      renderBook({ asks, bids });
+    }
+  }
+
+  async function loadTrades() {
+    if (!State.symbol) return;
+    try { renderTrades(await jget(API.trades(State.symbol, 50))); }
+    catch (_) {
+      const now = Date.now();
+      const side = () => Math.random()>0.5? 'buy':'sell';
+      const demo = Array.from({length:30}, (_,i)=>({ time: now - i*2000, price: 100 + (Math.random()-0.5)*2, size: Math.random()*2, side: side() }));
+      renderTrades(demo);
+    }
+  }
+
+  async function loadMyOrders() {
+    try { renderMyOrders(await jget(API.orders())); }
+    catch (_) { renderMyOrders([]); }
+  }
+
+  function clearTimers() { Object.values(State.timers).forEach(t => t && clearInterval(t)); }
+
+  function loadAll() {
+    loadTicker(); loadBook(); loadTrades(); loadMyOrders();
+  }
+
+  // ------------------------- EVENTS -------------------------
+  function bindUI() {
+    // Build stamp
+    $('#build').textContent = new Date().toISOString().replace('T',' ').slice(0,19);
+
+    // API Base
+    $('#apiBase').value = API.base; $('#saveApi').onclick = () => { API.base = $('#apiBase').value.trim(); loadAll(); };
+
+    // Markets
+    $('#reloadMarkets').onclick = loadMarkets; $('#search').addEventListener('input', () => renderMarkets(State.markets));
+
+    // Book
+    $('#reloadBook').onclick = loadBook;
+    $('#autoBook').addEventListener('change', e => { if (e.target.checked) State.timers.book = setInterval(loadBook, 1000); else { clearInterval(State.timers.book); State.timers.book = null; } });
+
+    // Trades
+    $('#reloadTrades').onclick = loadTrades;
+    $('#autoTrades').addEventListener('change', e => { if (e.target.checked) State.timers.trades = setInterval(loadTrades, 1000); else { clearInterval(State.timers.trades); State.timers.trades = null; } });
+
+    // Orders
+    $('#submitOrder').onclick = async () => {
+      const side = $('#side').value; const type = $('#otype').value; const price = parseFloat($('#price').value); const size = parseFloat($('#size').value);
+      const payload = { symbol: State.symbol, side, type, price: type==='LIMIT'? price : undefined, size };
+      $('#orderHint').textContent = 'status: sending...';
+      try {
+        const res = await jpost(API.orders(), payload);
+        $('#orderHint').textContent = `status: sent id=${res.id||'?'} ${res.status||''}`;
+        loadMyOrders();
+      } catch (e) { $('#orderHint').textContent = `status: error`; }
+    };
+    $('#cancelAll').onclick = async () => {
+      try {
+        const list = await jget(API.orders());
+        for (const o of list) { await jdel(API.cancel(o.id)); }
+        loadMyOrders();
+      } catch (_) {}
+    };
+
+    // Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.key === '/') { e.preventDefault(); $('#search').focus(); return; }
+      if (e.key.toLowerCase() === 'r') { loadBook(); return; }
+      if (e.key.toLowerCase() === 't') { loadTrades(); return; }
+      if (e.key.toLowerCase() === 'm') { loadMarkets(); return; }
+    });
+  }
+
+  // ------------------------- INIT -------------------------
+  bindUI();
+  loadMarkets().then(() => loadAll());
+  State.timers.book = setInterval(loadBook, 1000);
+  State.timers.trades = setInterval(loadTrades, 1000);
+
+  </script>
+</body>
+</html>

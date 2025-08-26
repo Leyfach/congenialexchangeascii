@@ -1,74 +1,23 @@
-import axios from 'axios';
+import api from './api.js'
 
-const API_BASE_URL = 'http://localhost:3000';
-
-// Set up axios interceptor to include auth token
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Handle token expiration
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired, clear local storage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.reload();
-    }
-    return Promise.reject(error);
-  }
-);
+const TOKEN_KEY = 'token'
+const USER_KEY = 'user'
 
 export const authService = {
-  // Check if user is authenticated
-  isAuthenticated() {
-    return !!localStorage.getItem('token');
+  login: async (credentials) => {
+    const { data } = await api.post('/api/auth/login', credentials)
+    localStorage.setItem(TOKEN_KEY, data.token)
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user))
+    return data
   },
-
-  // Get current user
-  getCurrentUser() {
-    const user = localStorage.getItem('user');
-    return user ? JSON.parse(user) : null;
+  register: async (userData) => {
+    const { data } = await api.post('/api/auth/register', userData)
+    localStorage.setItem(TOKEN_KEY, data.token)
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user))
+    return data
   },
-
-  // Get auth token
-  getToken() {
-    return localStorage.getItem('token');
-  },
-
-  // Login
-  async login(email, password) {
-    const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
-      email,
-      password
-    });
-    return response.data;
-  },
-
-  // Register
-  async register(email, password) {
-    const response = await axios.post(`${API_BASE_URL}/api/auth/register`, {
-      email,
-      password
-    });
-    return response.data;
-  },
-
-  // Logout
-  logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-  },
-
-  // Store auth data
-  storeAuthData(user, token) {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-  }
-};
+  logout: () => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY) },
+  getCurrentUser: () => { try { return JSON.parse(localStorage.getItem(USER_KEY)) } catch { return null } },
+  getToken: () => localStorage.getItem(TOKEN_KEY),
+  isAuthenticated: () => Boolean(localStorage.getItem(TOKEN_KEY))
+}

@@ -1,73 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import OrderBook from '../components/trading/OrderBook';
-import PriceChart from '../components/trading/PriceChart';
-import OrderForm from '../components/trading/OrderForm';
-import OrderHistory from '../components/trading/OrderHistory';
-import MarketSelector from '../components/trading/MarketSelector';
-import './TradingPage.css';
+import OrderForm from '../components/trading/OrderForm.jsx'
+import OrderBook from '../components/trading/OrderBook.jsx'
+import PriceChart from '../components/trading/PriceChart.jsx'
 
-const TradingPage = () => {
-  const [selectedPair, setSelectedPair] = useState('BTC/USD');
-  const [currentPrice, setCurrentPrice] = useState(0);
-  const [orderBookData, setOrderBookData] = useState({ bids: [], asks: [] });
-
-  useEffect(() => {
-    // Simulate real-time price updates
-    const interval = setInterval(() => {
-      const basePrice = selectedPair === 'BTC/USD' ? 45000 : selectedPair === 'ETH/USD' ? 3200 : 450;
-      const variation = (Math.random() - 0.5) * 1000;
-      setCurrentPrice(basePrice + variation);
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [selectedPair]);
-
-  const handleOrderPlaced = (order) => {
-    console.log('Order placed:', order);
-    // Refresh order book and history
-  };
-
+export default function TradingPage(){
   return (
-    <div className="trading-page">
-      <div className="trading-header">
-        <MarketSelector 
-          selectedPair={selectedPair} 
-          onPairChange={setSelectedPair}
-          currentPrice={currentPrice}
-        />
-      </div>
-
-      <div className="trading-layout">
-        {/* Left Column - Chart */}
-        <div className="chart-section">
-          <PriceChart pair={selectedPair} />
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 space-y-6">
+          <PriceChart />
+          <OrderBook />
         </div>
-
-        {/* Middle Column - Order Book */}
-        <div className="orderbook-section">
-          <OrderBook 
-            pair={selectedPair} 
-            data={orderBookData}
-            currentPrice={currentPrice}
-          />
+        <div>
+          <OrderForm />
         </div>
-
-        {/* Right Column - Order Form */}
-        <div className="order-section">
-          <OrderForm 
-            pair={selectedPair} 
-            currentPrice={currentPrice}
-            onOrderPlaced={handleOrderPlaced}
-          />
-        </div>
-      </div>
-
-      {/* Bottom Section - Order History */}
-      <div className="history-section">
-        <OrderHistory />
       </div>
     </div>
-  );
-};
-
-export default TradingPage;
+  )
+}

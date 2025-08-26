@@ -1,88 +1,50 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import './Auth.css';
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { authService } from '../../services/auth.js'
 
-const Login = ({ onLogin, switchToRegister }) => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+export default function Login() {
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ email: '', password: '' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-    setError('');
-  };
+  const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
+  const handleSubmit = async e => {
+    e.preventDefault()
+    setLoading(true); setError('')
     try {
-      const response = await axios.post('http://localhost:3000/api/auth/login', formData);
-      
-      // Store token in localStorage
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      
-      onLogin(response.data.user, response.data.token);
-    } catch (error) {
-      setError(error.response?.data?.error || 'Login failed');
+      await authService.login(form)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Login failed')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Login to Exchange</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              disabled={loading}
-            />
+    <div className="flex items-center justify-center py-16">
+      <div className="auth-box w-full card ascii-border">
+        <div className="card-header"><h2 className="card-title">LOGIN ▷ TERMINAL</h2><span className="badge-green">SECURE</span></div>
+        <div className="ascii-sub mb-4">/api/auth/login</div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-green-200 text-sm">email</label>
+            <input name="email" type="email" className="ascii-input mt-1" placeholder="user@domain" value={form.email} onChange={handleChange} required />
           </div>
-          
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              disabled={loading}
-            />
+          <div>
+            <label className="text-green-200 text-sm">password</label>
+            <input name="password" type="password" className="ascii-input mt-1" placeholder="••••••••" value={form.password} onChange={handleChange} required />
           </div>
-
-          {error && <div className="error-message">{error}</div>}
-
-          <button type="submit" disabled={loading} className="auth-button">
-            {loading ? 'Logging in...' : 'Login'}
+          {error && <div className="text-red-400 text-sm">{error}</div>}
+          <button className="ascii-btn w-full py-3 glow" disabled={loading}>
+            {loading ? 'AUTHENTICATING…' : 'CONNECT'} <span className="cursor ml-2" />
           </button>
         </form>
-
-        <p className="auth-switch">
-          Don't have an account? 
-          <button onClick={switchToRegister} className="link-button">
-            Sign up here
-          </button>
-        </p>
+        <div className="ascii-hr" />
+        <div className="text-sm text-green-300/80">No access token? <Link to="/register" className="link">register</Link></div>
       </div>
     </div>
-  );
-};
-
-export default Login;
+  )
+}

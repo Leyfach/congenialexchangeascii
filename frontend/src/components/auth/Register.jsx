@@ -1,117 +1,56 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import './Auth.css';
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { authService } from '../../services/auth.js'
 
-const Register = ({ onLogin, switchToLogin }) => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: ''
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+export default function Register() {
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-    setError('');
-  };
+  const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      setLoading(false);
-      return;
-    }
-
+  const handleSubmit = async e => {
+    e.preventDefault()
+    setLoading(true); setError('')
     try {
-      const response = await axios.post('http://localhost:3000/api/auth/register', {
-        email: formData.email,
-        password: formData.password
-      });
-      
-      // Store token in localStorage
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      
-      onLogin(response.data.user, response.data.token);
-    } catch (error) {
-      setError(error.response?.data?.error || 'Registration failed');
+      await authService.register(form)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Registration failed')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Create Account</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              disabled={loading}
-            />
+    <div className="flex items-center justify-center py-16">
+      <div className="auth-box w-full card ascii-border">
+        <div className="card-header"><h2 className="card-title">REGISTER ▷ ACCESS</h2><span className="badge-green">NEW USER</span></div>
+        <div className="ascii-sub mb-4">/api/auth/register</div>
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
+          <div>
+            <label className="text-green-200 text-sm">firstName</label>
+            <input name="firstName" className="ascii-input mt-1" value={form.firstName} onChange={handleChange} required />
           </div>
-          
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              minLength="6"
-            />
+          <div>
+            <label className="text-green-200 text-sm">lastName</label>
+            <input name="lastName" className="ascii-input mt-1" value={form.lastName} onChange={handleChange} required />
           </div>
-
-          <div className="form-group">
-            <label>Confirm Password</label>
-            <input
-              type="password"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              disabled={loading}
-            />
+          <div>
+            <label className="text-green-200 text-sm">email</label>
+            <input name="email" type="email" className="ascii-input mt-1" value={form.email} onChange={handleChange} required />
           </div>
-
-          {error && <div className="error-message">{error}</div>}
-
-          <button type="submit" disabled={loading} className="auth-button">
-            {loading ? 'Creating Account...' : 'Sign Up'}
-          </button>
+          <div>
+            <label className="text-green-200 text-sm">password</label>
+            <input name="password" type="password" className="ascii-input mt-1" value={form.password} onChange={handleChange} required />
+          </div>
+          {error && <div className="text-red-400 text-sm">{error}</div>}
+          <button className="ascii-btn w-full py-3 glow" disabled={loading}>{loading ? 'CREATING…' : 'INIT ACCESS'}<span className="cursor ml-2" /></button>
         </form>
-
-        <p className="auth-switch">
-          Already have an account? 
-          <button onClick={switchToLogin} className="link-button">
-            Login here
-          </button>
-        </p>
+        <div className="ascii-hr" />
+        <div className="text-sm text-green-300/80">Already authorized? <Link to="/login" className="link">login</Link></div>
       </div>
     </div>
-  );
-};
-
-export default Register;
+  )
+}

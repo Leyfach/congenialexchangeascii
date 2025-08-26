@@ -21,7 +21,7 @@
     radial-gradient(circle at 40% 80%, rgba(255, 107, 53, 0.05) 0%, transparent 50%);
   pointer-events: none;
 }
-
+.auth-box { max-width: 420px; }
 .auth-card {
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(25px);
@@ -184,6 +184,10 @@
   margin-top: 32px;
   color: rgba(255, 255, 255, 0.6);
   font-size: 0.95rem;
+}
+
+.auth-box {
+  max-width: 420px; 
 }
 
 .link-button {

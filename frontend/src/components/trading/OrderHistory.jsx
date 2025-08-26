@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../services/api.js';
+import { authService } from '../../services/auth.js';
 import './OrderHistory.css';
 
 const OrderHistory = () => {
@@ -8,18 +9,36 @@ const OrderHistory = () => {
   const [filter, setFilter] = useState('all'); // all, open, completed, cancelled
 
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 5000); // Refresh every 5 seconds
-    return () => clearInterval(interval);
+    // Only fetch orders if user is authenticated
+    if (authService.isAuthenticated()) {
+      fetchOrders();
+      const interval = setInterval(fetchOrders, 5000); // Refresh every 5 seconds
+      return () => clearInterval(interval);
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const fetchOrders = async () => {
+    // Double-check authentication before making request
+    if (!authService.isAuthenticated()) {
+      setLoading(false);
+      return;
+    }
+    
     try {
-      const response = await axios.get('http://localhost:3000/api/orders');
+      const response = await api.get('/api/orders');
       setOrders(response.data);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      
+      // If it's an authentication error, stop trying
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.log('Authentication failed, stopping order polling');
+        setLoading(false);
+        return;
+      }
       // Fallback to mock data
       setOrders([
         {
@@ -50,8 +69,13 @@ const OrderHistory = () => {
   };
 
   const cancelOrder = async (orderId) => {
+    if (!authService.isAuthenticated()) {
+      alert('Please log in to cancel orders');
+      return;
+    }
+    
     try {
-      await axios.delete(`http://localhost:3000/api/orders/${orderId}`);
+      await api.delete(`/api/orders/${orderId}`);
       fetchOrders(); // Refresh the list
     } catch (error) {
       console.error('Error cancelling order:', error);

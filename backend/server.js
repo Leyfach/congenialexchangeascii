@@ -7,6 +7,7 @@ const UserModel = require('./services/user/userModel');
 const OrderModel = require('./services/order/orderModel');
 const WalletModel = require('./services/wallet/walletModel');
 const MarketModel = require('./services/market-data/marketModel');
+const TradingEngine = require('./services/trading/tradingEngine');
 
 // Middleware and utilities
 const { authenticateToken, optionalAuth } = require('./shared/middleware/auth');
@@ -30,11 +31,11 @@ app.get('/api/markets', async (req, res) => {
     try {
       const tradingPairs = await MarketModel.getTradingPairs();
       
-      // Add mock price data (you'd get this from external APIs in real app)
+      // Get real-time prices from order book
       const mockPrices = {
-        'BTC/USD': { price: 45000, volume: 1234.56, change: '+2.5%' },
-        'ETH/USD': { price: 3200, volume: 5678.90, change: '-1.2%' },
-        'BNB/USD': { price: 450, volume: 9876.54, change: '+0.8%' }
+        'BTC/USD': { price: TradingEngine.getOrderBookPrice(1), volume: 1234.56, change: '+2.5%' },
+        'ETH/USD': { price: TradingEngine.getOrderBookPrice(2), volume: 5678.90, change: '-1.2%' },
+        'BNB/USD': { price: TradingEngine.getOrderBookPrice(3), volume: 9876.54, change: '+0.8%' }
       };
 
       markets = tradingPairs.map(pair => ({
@@ -44,11 +45,17 @@ app.get('/api/markets', async (req, res) => {
       }));
     } catch (dbError) {
       console.log('Database not connected, using fallback data');
-      // Fallback data if database is not connected
+      // Get current prices from order book
+      const btcPrice = TradingEngine.getOrderBookPrice(1);
+      const ethPrice = TradingEngine.getOrderBookPrice(2);
+      const bnbPrice = TradingEngine.getOrderBookPrice(3);
+      
+      console.log('Order book prices:', { btcPrice, ethPrice, bnbPrice });
+      
       markets = [
-        { id: 1, pair: 'BTC/USD', price: 45000, volume: 1234.56, change: '+2.5%' },
-        { id: 2, pair: 'ETH/USD', price: 3200, volume: 5678.90, change: '-1.2%' },
-        { id: 3, pair: 'BNB/USD', price: 450, volume: 9876.54, change: '+0.8%' }
+        { id: 1, pair: 'BTC/USD', price: btcPrice, volume: 1234.56, change: '+2.5%' },
+        { id: 2, pair: 'ETH/USD', price: ethPrice, volume: 5678.90, change: '-1.2%' },
+        { id: 3, pair: 'BNB/USD', price: bnbPrice, volume: 9876.54, change: '+0.8%' }
       ];
     }
 
@@ -69,12 +76,14 @@ app.get('/api/markets/:pair/orderbook', async (req, res) => {
       return res.status(404).json({ error: 'Trading pair not found' });
     }
 
-    const orderbook = await MarketModel.getOrderBook(tradingPair.id);
+    // Get real-time order book from TradingEngine
+    const orderbook = TradingEngine.getOrderBook(tradingPair.id);
     res.json({
       pair,
       ...orderbook
     });
   } catch (error) {
+    console.error('Orderbook fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch orderbook' });
   }
 });
@@ -162,11 +171,18 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Trading pair not found' });
     }
     
-    const order = await OrderModel.create(userId, tradingPair.id, side, quantity, price, type);
-    res.json({ message: 'Order placed', order });
+    // Use TradingEngine to process the order with matching
+    const result = await TradingEngine.processOrder(userId, tradingPair.id, side, quantity, price, type);
+    
+    res.json({ 
+      message: 'Order processed', 
+      order: result.order, 
+      trades: result.trades,
+      tradesExecuted: result.trades.length 
+    });
   } catch (error) {
     console.error('Order creation error:', error);
-    res.status(500).json({ error: 'Failed to place order' });
+    res.status(500).json({ error: error.message || 'Failed to place order' });
   }
 });
 
@@ -192,7 +208,8 @@ app.delete('/api/orders/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
     
-    const deletedOrder = await OrderModel.delete(id);
+    // Use TradingEngine to cancel order (removes from order book)
+    const deletedOrder = await TradingEngine.cancelOrder(id, userId);
     res.json({ message: 'Order cancelled', order: deletedOrder });
   } catch (error) {
     console.error('Order cancellation error:', error);
@@ -209,6 +226,100 @@ app.get('/api/wallets', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Wallets fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch wallets' });
+  }
+});
+
+app.get('/api/user/wallet', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const wallets = await WalletModel.findByUserId(userId);
+    
+    // Transform to dashboard format
+    const balances = {};
+    let totalEquity = 0;
+    
+    wallets.forEach(wallet => {
+      balances[wallet.currency] = parseFloat(wallet.balance);
+      if (wallet.currency === 'USD') {
+        totalEquity += parseFloat(wallet.balance);
+      } else {
+        // For simplicity, using mock conversion rates
+        const rates = { BTC: 45000, ETH: 3200 };
+        totalEquity += parseFloat(wallet.balance) * (rates[wallet.currency] || 0);
+      }
+    });
+    
+    res.json({
+      balances,
+      equity: totalEquity,
+      pnl24h: Math.random() * 5 - 2.5, // Mock PnL
+      exposure: Math.random() * 50 // Mock exposure
+    });
+  } catch (error) {
+    console.error('User wallet fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch wallet' });
+  }
+});
+
+app.get('/api/user/trades', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const orders = await OrderModel.findByUserId(userId);
+    
+    // Transform orders to trades format for dashboard
+    const trades = orders
+      .filter(order => order.status === 'completed' || order.status === 'filled')
+      .map(order => ({
+        id: order.id,
+        pair: order.pair || `${order.base_currency}/${order.quote_currency}`,
+        side: order.side,
+        price: parseFloat(order.price),
+        amount: parseFloat(order.quantity),
+        createdAt: order.created_at
+      }))
+      .slice(0, 10); // Limit to 10 most recent trades
+    
+    res.json(trades);
+  } catch (error) {
+    console.error('User trades fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch trades' });
+  }
+});
+
+// User profile endpoint
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await UserModel.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get wallet balances
+    const wallets = await WalletModel.findByUserId(userId);
+    const balances = {};
+    wallets.forEach(wallet => {
+      balances[wallet.currency] = wallet.balance;
+    });
+
+    // Get recent orders
+    const orders = await OrderModel.findByUserId(userId);
+    
+    const profile = {
+      id: user.id,
+      email: user.email,
+      created_at: user.created_at,
+      balances,
+      totalOrders: orders.length,
+      completedOrders: orders.filter(o => o.status === 'filled' || o.status === 'completed').length,
+      pendingOrders: orders.filter(o => o.status === 'pending' || o.status === 'partial').length
+    };
+    
+    res.json(profile);
+  } catch (error) {
+    console.error('User profile fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 

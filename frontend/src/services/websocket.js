@@ -2,21 +2,36 @@ const defaultPairs = [
     'BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','DOT/USD','AVAX/USD','ARB/USD','TON/USD'
   ]
   
-  let state = Object.fromEntries(defaultPairs.map(p => [p, { price: 100 + Math.random()*50000, change: '+0.00%' }]))
+  let state = Object.fromEntries(defaultPairs.map(p => [p, { price: 0, change: '+0.00%' }]))
   let subs = new Set()
   
-  function tick(){
-    Object.keys(state).forEach(pair => {
-      const p = state[pair].price
-      const drift = (Math.random()-0.5) * (p*0.002)
-      const np = Math.max(0.0001, p + drift)
-      const ch = ((np - p) / p * 100)
-      state[pair] = { price: np, change: `${ch>=0?'+':''}${ch.toFixed(2)}%` }
-    })
-    subs.forEach(cb => cb(state))
+  // Fetch real prices from backend
+  async function updatePricesFromBackend() {
+    try {
+      const response = await fetch('http://localhost:3000/api/markets')
+      const markets = await response.json()
+      
+      markets.forEach(market => {
+        const currentPrice = state[market.pair]?.price || 0
+        const newPrice = market.price
+        const change = currentPrice > 0 ? ((newPrice - currentPrice) / currentPrice * 100) : 0
+        
+        state[market.pair] = {
+          price: newPrice,
+          change: market.change || `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`
+        }
+      })
+      
+      // Notify subscribers
+      subs.forEach(cb => cb(state))
+    } catch (error) {
+      console.error('Failed to update prices:', error)
+    }
   }
   
-  setInterval(tick, 1200)
+  // Initial load and periodic updates every 2 seconds
+  updatePricesFromBackend()
+  setInterval(updatePricesFromBackend, 2000)
   
   export function primeTickersFromBackend(list){
     // list: [{pair, price, change}]

@@ -12,9 +12,20 @@ import MarketTable from './components/markets/MarketTable.jsx'
 import OrderBook from './components/trading/OrderBook.jsx'
 import { authService } from './services/auth.js'
 import MatrixBackground from './components/common/MatrixBackground.jsx'
+import TokenFixer from './components/auth/TokenFixer.jsx'
+import { useState } from 'react'
 
 function ProtectedRoute({ children }) {
-  return authService.isAuthenticated() ? children : <Navigate to="/login" replace />
+  const [key, setKey] = useState(0)
+  
+  const handleAuthSuccess = () => {
+    // Force re-render by updating key
+    setKey(prev => prev + 1)
+  }
+  
+  return authService.isAuthenticated() ? 
+    <div key={key}>{children}</div> : 
+    <TokenFixer onSuccess={handleAuthSuccess} />
 }
 
 export default function App() {

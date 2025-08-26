@@ -6,7 +6,7 @@ let memoryUsers = [
   {
     id: 1,
     email: 'test@test.com',
-    password_hash: '$2a$10$rOkJzq3QtX6UE8LXFLmvpegGz9GnF3oGSVlgW5/U0Y0OQhOzLrW1G', // password: "password123"
+    password_hash: '$2a$10$e4X8f5JYT8i8lYyYF6WPUO.Szsz7Kjb01/wCBc3Ws1n5Cwg/nWClK', // password: "password123"
     created_at: new Date()
   }
 ];

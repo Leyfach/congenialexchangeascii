@@ -1,7 +1,13 @@
 const pool = require('../../shared/config/database');
 
 // In-memory fallback storage
-let memoryWallets = [];
+let memoryWallets = [
+  // Add demo wallets for testing with user_id: 1
+  { id: 1, user_id: 1, currency: 'USD', balance: 10000.0, created_at: new Date() },
+  { id: 2, user_id: 1, currency: 'BTC', balance: 2.0, created_at: new Date() },
+  { id: 3, user_id: 1, currency: 'ETH', balance: 10.0, created_at: new Date() },
+  { id: 4, user_id: 1, currency: 'BNB', balance: 50.0, created_at: new Date() }
+];
 
 class WalletModel {
   static async create(userId, currency, balance = 0) {

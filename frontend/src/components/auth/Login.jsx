@@ -4,7 +4,7 @@ import { authService } from '../../services/auth.js'
 
 export default function Login() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ email: '', password: '' })
+  const [form, setForm] = useState({ email: 'test@test.com', password: 'password123' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -15,7 +15,7 @@ export default function Login() {
     setLoading(true); setError('')
     try {
       await authService.login(form)
-      navigate('/dashboard')
+      navigate('/trading')
     } catch (err) {
       setError(err?.response?.data?.message || 'Login failed')
     } finally {

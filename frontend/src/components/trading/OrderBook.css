@@ -1,0 +1,142 @@
+.order-book {
+  height: 100%;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 11px;
+  background: #161618;
+  display: flex;
+  flex-direction: column;
+}
+
+.order-book h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  padding: 15px 12px;
+  border-bottom: 1px solid #2a2a2e;
+  background: #1a1a1d;
+  font-weight: 600;
+}
+
+.loading {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+}
+
+.order-book-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 8px 12px;
+  background: #1a1a1d;
+  border-bottom: 1px solid #2a2a2e;
+  color: #888;
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.order-book-header span {
+  text-align: right;
+}
+
+.order-book-header span:first-child {
+  text-align: left;
+}
+
+.asks {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.bids {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 3px 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  min-height: 20px;
+  align-items: center;
+}
+
+.order-row:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.order-row span {
+  text-align: right;
+  padding: 0 2px;
+}
+
+.order-row span:first-child {
+  text-align: left;
+}
+
+.ask .price {
+  color: #ff6b6b;
+  font-weight: 500;
+}
+
+.bid .price {
+  color: #51cf66;
+  font-weight: 500;
+}
+
+.quantity {
+  color: #fff;
+}
+
+.total {
+  color: #888;
+}
+
+.current-price {
+  text-align: center;
+  padding: 12px;
+  background: linear-gradient(135deg, #1a1a1d 0%, #2a2a2e 100%);
+  margin: 0;
+  border-top: 1px solid #2a2a2e;
+  border-bottom: 1px solid #2a2a2e;
+  position: relative;
+}
+
+.current-price span:first-child {
+  display: block;
+  font-size: 14px;
+  font-weight: bold;
+  color: #f7931a;
+  margin-bottom: 4px;
+}
+
+.spread {
+  font-size: 10px;
+  color: #888;
+}
+
+/* Depth visualization */
+.order-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1));
+  z-index: -1;
+  width: 0%;
+  transition: width 0.3s;
+}
+
+.ask::before {
+  background: linear-gradient(to left, rgba(246, 70, 93, 0.2), transparent);
+}
+
+.bid::before {
+  background: linear-gradient(to left, rgba(14, 203, 129, 0.2), transparent);
+}

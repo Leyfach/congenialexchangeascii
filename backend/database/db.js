@@ -40,7 +40,7 @@ function initDatabase() {
     )
   `);
 
-  // Orders table
+  // Orders table - Enhanced with advanced order types
   db.exec(`
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,12 +48,25 @@ function initDatabase() {
       order_id TEXT UNIQUE NOT NULL,
       pair TEXT NOT NULL,
       side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
-      type TEXT NOT NULL CHECK (type IN ('limit', 'market')),
+      type TEXT NOT NULL CHECK (type IN ('limit', 'market', 'stop_loss', 'take_profit', 'stop_limit', 'trailing_stop', 'iceberg', 'oco')),
       quantity DECIMAL(20, 8) NOT NULL,
       price DECIMAL(20, 8),
-      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'filled', 'cancelled')),
+      stop_price DECIMAL(20, 8),
+      trail_amount DECIMAL(20, 8),
+      trail_percent DECIMAL(10, 4),
+      iceberg_qty DECIMAL(20, 8),
+      time_in_force TEXT DEFAULT 'GTC' CHECK (time_in_force IN ('GTC', 'IOC', 'FOK')),
+      oco_id TEXT,
+      parent_order_id TEXT,
+      reduce_only BOOLEAN DEFAULT FALSE,
+      post_only BOOLEAN DEFAULT FALSE,
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'open', 'partially_filled', 'filled', 'cancelled', 'expired', 'triggered')),
+      filled_quantity DECIMAL(20, 8) DEFAULT 0,
+      avg_fill_price DECIMAL(20, 8),
+      last_trigger_price DECIMAL(20, 8),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       filled_at DATETIME,
+      triggered_at DATETIME,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
@@ -125,6 +138,90 @@ function initDatabase() {
       status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       processed_at DATETIME,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Price data table for caching API responses
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS price_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      symbol TEXT NOT NULL,
+      price DECIMAL(20, 8) NOT NULL,
+      change_24h DECIMAL(10, 4) DEFAULT 0,
+      volume_24h DECIMAL(20, 8) DEFAULT 0,
+      market_cap DECIMAL(20, 2) DEFAULT 0,
+      last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(symbol)
+    )
+  `);
+
+  // 2FA table for storing user TOTP secrets
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_2fa (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      secret TEXT NOT NULL,
+      enabled BOOLEAN DEFAULT FALSE,
+      backup_codes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      enabled_at DATETIME,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id)
+    )
+  `);
+
+  // Security logs table for tracking authentication events
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS security_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Margin accounts for leverage trading
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS margin_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      base_currency TEXT NOT NULL,
+      quote_currency TEXT NOT NULL,
+      collateral DECIMAL(20, 8) DEFAULT 0,
+      borrowed_base DECIMAL(20, 8) DEFAULT 0,
+      borrowed_quote DECIMAL(20, 8) DEFAULT 0,
+      interest_rate DECIMAL(10, 6) DEFAULT 0.001,
+      liquidation_price DECIMAL(20, 8),
+      margin_level DECIMAL(10, 4),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, base_currency, quote_currency)
+    )
+  `);
+
+  // Position tracking for margin trading
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS positions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      pair TEXT NOT NULL,
+      side TEXT NOT NULL CHECK (side IN ('long', 'short')),
+      size DECIMAL(20, 8) NOT NULL,
+      entry_price DECIMAL(20, 8) NOT NULL,
+      leverage DECIMAL(10, 2) NOT NULL,
+      margin DECIMAL(20, 8) NOT NULL,
+      unrealized_pnl DECIMAL(20, 8) DEFAULT 0,
+      liquidation_price DECIMAL(20, 8),
+      status TEXT DEFAULT 'open' CHECK (status IN ('open', 'closed', 'liquidated')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      closed_at DATETIME,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
@@ -212,6 +309,76 @@ function initDatabase() {
 
   dbOps.getUserWithdrawals = db.prepare(`
     SELECT * FROM withdrawals 
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 50
+  `);
+
+  // Price data operations
+  dbOps.upsertPriceData = db.prepare(`
+    INSERT INTO price_data (symbol, price, change_24h, volume_24h, market_cap, last_updated)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(symbol) DO UPDATE SET
+      price = excluded.price,
+      change_24h = excluded.change_24h,
+      volume_24h = excluded.volume_24h,
+      market_cap = excluded.market_cap,
+      last_updated = CURRENT_TIMESTAMP
+  `);
+
+  dbOps.getPriceData = db.prepare(`
+    SELECT * FROM price_data 
+    WHERE symbol = ?
+  `);
+
+  dbOps.getAllPriceData = db.prepare(`
+    SELECT * FROM price_data 
+    ORDER BY symbol
+  `);
+
+  dbOps.getRecentPriceData = db.prepare(`
+    SELECT * FROM price_data 
+    WHERE last_updated > datetime('now', '-5 minutes')
+    ORDER BY symbol
+  `);
+
+  // 2FA operations
+  dbOps.create2FASecret = db.prepare(`
+    INSERT INTO user_2fa (user_id, secret, backup_codes)
+    VALUES (?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      secret = excluded.secret,
+      backup_codes = excluded.backup_codes,
+      enabled = FALSE
+  `);
+
+  dbOps.enable2FA = db.prepare(`
+    UPDATE user_2fa 
+    SET enabled = TRUE, enabled_at = CURRENT_TIMESTAMP
+    WHERE user_id = ?
+  `);
+
+  dbOps.disable2FA = db.prepare(`
+    UPDATE user_2fa 
+    SET enabled = FALSE
+    WHERE user_id = ?
+  `);
+
+  dbOps.get2FASettings = db.prepare(`
+    SELECT secret, enabled, backup_codes, created_at, enabled_at
+    FROM user_2fa 
+    WHERE user_id = ?
+  `);
+
+  // Security logging
+  dbOps.logSecurityEvent = db.prepare(`
+    INSERT INTO security_logs (user_id, event_type, ip_address, user_agent, details)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  dbOps.getSecurityLogs = db.prepare(`
+    SELECT event_type, ip_address, details, created_at
+    FROM security_logs 
     WHERE user_id = ?
     ORDER BY created_at DESC
     LIMIT 50

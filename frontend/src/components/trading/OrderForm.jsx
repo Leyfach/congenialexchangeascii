@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api.js'
 import { authService } from '../../services/auth.js'
+import tradingWebSocket from '../../services/websocket-trading.js'
 
 export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
   const [form, setForm] = useState({ pair, type: 'limit', side: 'buy', amount: '', price: '' })
@@ -167,7 +168,9 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
         orderData.price = getMarketPrice()
       }
 
-      const { data } = await api.post('/api/orders', orderData)
+      // Use only HTTP API - WebSocket will receive updates automatically
+      const response = await api.post('/api/trading/orders', orderData);
+      const data = response.data;
       
       const tradesText = data.tradesExecuted > 0 ? ` (${data.tradesExecuted} trades executed)` : ''
       setStatus(`✅ ORDER ACCEPTED #${data.order?.id || data?.id || '—'}${tradesText}`)

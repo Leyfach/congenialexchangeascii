@@ -8,7 +8,7 @@ const defaultPairs = [
   // Fetch real prices from backend
   async function updatePricesFromBackend() {
     try {
-      const response = await fetch('http://localhost:3000/api/markets')
+      const response = await fetch('http://localhost:3001/api/markets')
       const markets = await response.json()
       
       markets.forEach(market => {

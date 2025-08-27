@@ -10,6 +10,7 @@ export default function Navbar() {
         <NavLink to="/markets" className="hover:text-neon-matrix">/api/markets</NavLink>
         <NavLink to="/wallet" className="hover:text-neon-matrix">/api/user/wallet</NavLink>
         <NavLink to="/trading" className="hover:text-neon-matrix">/api/trading/order</NavLink>
+        <NavLink to="/security" className="hover:text-neon-matrix">/api/auth/2fa</NavLink>
       </div>
     </div>
   )

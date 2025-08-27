@@ -1,12 +1,43 @@
 import { subscribeTickers as _subscribe, primeTickersFromBackend } from '../services/websocket.js'
 
-export function formatCurrency(n){
+export function formatCurrency(n, showSymbol = true){
   if (n == null) return '—'
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(n))
+  const num = Number(n);
+  
+  if (showSymbol) {
+    // For prices < $1, show more decimal places
+    if (num < 1) {
+      return new Intl.NumberFormat(undefined, { 
+        style: 'currency', 
+        currency: 'USD', 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6 
+      }).format(num);
+    } else if (num < 100) {
+      return new Intl.NumberFormat(undefined, { 
+        style: 'currency', 
+        currency: 'USD', 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4 
+      }).format(num);
+    } else {
+      return new Intl.NumberFormat(undefined, { 
+        style: 'currency', 
+        currency: 'USD', 
+        maximumFractionDigits: 2 
+      }).format(num);
+    }
+  } else {
+    // For volumes and large numbers, no currency symbol
+    return new Intl.NumberFormat(undefined, { 
+      maximumFractionDigits: 0 
+    }).format(num);
+  }
 }
 
 export function formatPct(s){
   if (typeof s === 'number') return `${s>=0?'+':''}${s.toFixed(2)}%`
+  if (typeof s === 'string' && s.includes('%')) return s
   return s
 }
 

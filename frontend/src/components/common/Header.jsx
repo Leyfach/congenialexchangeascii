@@ -26,6 +26,7 @@ export default function Header() {
           <NavLink to="/wallet" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>WALLET</NavLink>
           <NavLink to="/dashboard" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>DASHBOARD</NavLink>
           <NavLink to="/account" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>ACCOUNT</NavLink>
+          <NavLink to="/security" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>SECURITY</NavLink>
         </nav>
         <div className="flex items-center gap-3">
           {user ? (

@@ -56,8 +56,8 @@ export default function MarketTable() {
             <tr key={i}>
               <td className="tracking-widest">{r.pair}</td>
               <td>{formatCurrency(r.price)}</td>
-              <td className={String(r.change).startsWith('-')? 'price-down':'price-up'}>{r.change}</td>
-              <td>{r.volume}</td>
+              <td className={String(r.change).startsWith('-')? 'price-down':'price-up'}>{formatPct(r.change)}</td>
+              <td>{typeof r.volume === 'number' ? formatCurrency(r.volume, false) : r.volume}</td>
             </tr>
           ))}
         </tbody>

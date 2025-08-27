@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage.jsx'
 import TradingPage from './pages/TradingPage.jsx'
 import WalletPage from './pages/WalletPage.jsx'
 import AccountPage from './pages/AccountPage.jsx'
+import Security from './pages/Security.jsx'
 import Login from './components/auth/Login.jsx'
 import Register from './components/auth/Register.jsx'
 import Header from './components/common/Header.jsx'
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/trading" element={<ProtectedRoute><TradingPage /></ProtectedRoute>} />
             <Route path="/wallet" element={<ProtectedRoute><WalletPage /></ProtectedRoute>} />
             <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+            <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

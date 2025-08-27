@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import api from '../services/api.js';
 
 const MarketContext = createContext();
 
@@ -45,6 +46,39 @@ export function MarketProvider({ children }) {
       volume: 678901
     }
   });
+
+  // Load initial price data from API
+  useEffect(() => {
+    const loadPrices = async () => {
+      try {
+        const response = await api.get('/api/markets');
+        const marketMap = {};
+        
+        response.data.forEach(market => {
+          marketMap[market.pair] = {
+            price: market.price,
+            change: market.change,
+            volume: market.volume,
+            marketCap: market.marketCap
+          };
+        });
+        
+        setMarketData(marketMap);
+        console.log('Loaded real market data:', marketMap);
+        
+      } catch (error) {
+        console.error('Failed to load market data:', error);
+        // Keep using default/mock data on error
+      }
+    };
+    
+    loadPrices();
+    
+    // Set up periodic price updates
+    const interval = setInterval(loadPrices, 60000); // Update every minute
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const updatePrice = (pair, price) => {
     setMarketData(prev => ({

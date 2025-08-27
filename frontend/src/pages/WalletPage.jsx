@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../services/api.js'
 
 export default function WalletPage(){
+  const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [wallets, setWallets] = useState([])
   const [deposits, setDeposits] = useState([])
@@ -84,7 +86,7 @@ export default function WalletPage(){
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="card ascii-border">
         <div className="card-header">
-          <h3 className="card-title">WALLET MANAGEMENT</h3>
+          <h3 className="card-title">{t('wallet.title').toUpperCase()} MANAGEMENT</h3>
           <div className="flex items-center gap-2">
             <span className="badge-green">LIVE</span>
             <button 
@@ -176,7 +178,7 @@ export default function WalletPage(){
                   disabled={loading}
                   className="ascii-btn px-3 py-1 disabled:opacity-50"
                 >
-                  {loading ? 'GENERATING...' : 'GENERATE WALLETS'}
+{loading ? t('common.loading').toUpperCase() : t('wallet.generateWallet').toUpperCase()}
                 </button>
               )}
             </div>

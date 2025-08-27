@@ -1,0 +1,299 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "testuser@test.com",
+      "password": "$2a$10$cxJVvMmH66SsikljQOAvhOZgKiPKi8Mb0UgU04rPkVSLUzR5AiIYu",
+      "firstName": "Test",
+      "lastName": "User",
+      "created": "2025-08-27T18:05:08.268Z"
+    },
+    {
+      "id": 2,
+      "email": "demo@example.com",
+      "password": "$2a$10$YA2HUYe79nKuapZq7fJwXeoW4BMGw3FxQ7ZiD6DtOqZSsHeYv5fnm",
+      "firstName": "thuemmler908",
+      "lastName": "Фролов",
+      "created": "2025-08-27T18:06:19.669Z"
+    },
+    {
+      "id": 3,
+      "email": "thuemmler22222@gmail.com",
+      "password": "$2a$10$GBt/F0Y7M6dt3R.cj9qB5u49KtaPT5R4jJ7GCULWwFQAkqfZjxMq.",
+      "firstName": "sdfgsdfg",
+      "lastName": "gdfsgdfsg",
+      "created": "2025-08-27T18:06:35.685Z"
+    },
+    {
+      "id": 4,
+      "email": "thuemmler222222@gmail.com",
+      "password": "$2a$10$V2ZcuSurBgzB.XqAWFhX1.w8h7YbpIyCpUcEHFQ38tHnn66O.c35m",
+      "firstName": "ппп",
+      "lastName": "ппп",
+      "created": "2025-08-27T18:12:49.725Z"
+    },
+    {
+      "id": 5,
+      "email": "thuemmler2222222@gmail.com",
+      "password": "$2a$10$vfWJoIUkBpbqwf27ejK8fetORSexAG2ie1W5.GTvy433Ac7SLc/BC",
+      "firstName": "выфпф",
+      "lastName": "пвып",
+      "created": "2025-08-27T18:12:58.100Z"
+    },
+    {
+      "id": 6,
+      "email": "thuemmler22222222@gmail.com",
+      "password": "$2a$10$Z7o6OtpAvxUG.RlSH4/1neU21XlHV1u3U6GRQ6Ts7dw.sSxvUbD7a",
+      "firstName": "bob",
+      "lastName": "carl",
+      "created": "2025-08-27T18:15:42.376Z"
+    },
+    {
+      "id": 7,
+      "email": "gsdhsjogfoijgfij@mail.ru",
+      "password": "$2a$10$7iL74QT1iPaxC3dnzR5qAutzvibpLn5a/i1d2cyr8ptP3mIyaGhh2",
+      "firstName": "gdsfgdfs",
+      "lastName": "gdfsgds",
+      "created": "2025-08-27T18:16:07.851Z"
+    },
+    {
+      "id": 8,
+      "email": "testnewacc@gmail.com",
+      "password": "$2a$10$xCU2OYk189Ad7r7c/07pR.ziapKLLyH/gMlDsmIVspXFDi5IItKTa",
+      "firstName": "New",
+      "lastName": "User",
+      "created": "2025-08-27T18:16:51.343Z"
+    },
+    {
+      "id": 9,
+      "email": "finaltest@gmail.com",
+      "password": "$2a$10$b.TzH7azDPbBXGnkFlqrIeQam9QkYtFfnsHl1aRJpuuswttgT31ZK",
+      "firstName": "Final",
+      "lastName": "Test",
+      "created": "2025-08-27T18:17:38.856Z",
+      "balances": {
+        "USD": {
+          "balance": 1000,
+          "available": 900,
+          "locked": 100
+        },
+        "BTC": {
+          "balance": 0.0011801544017293912,
+          "available": 0.000979744010491211,
+          "locked": 0.000010604099633355
+        },
+        "ETH": {
+          "balance": 0.011560297397852852,
+          "available": 0.010906867493675402,
+          "locked": 0.0007038010551580741
+        },
+        "SOL": {
+          "balance": 1.0019021264255494,
+          "available": 0.9965200090283381,
+          "locked": 0.16755690940306073
+        }
+      }
+    },
+    {
+      "id": 10,
+      "email": "premium@vip.com",
+      "password": "$2a$10$eapJtKq5wIrKrgPrx0OpOOR/xY7kZffU0k1vPMPUFRZkJEpGeSRZO",
+      "firstName": "Premium",
+      "lastName": "User",
+      "accountType": "premium",
+      "token": "user-token-10-1756318828384",
+      "created": "2025-08-27T18:20:28.384Z",
+      "balances": {
+        "USD": {
+          "balance": 50000,
+          "available": 45000,
+          "locked": 5000
+        },
+        "BTC": {
+          "balance": 0.21174008885836862,
+          "available": 0.17776283772667878,
+          "locked": 0.0391138162331316
+        },
+        "ETH": {
+          "balance": 2.3795500902867244,
+          "available": 2.2199545983857676,
+          "locked": 0.13293436866396863
+        },
+        "SOL": {
+          "balance": 43.11196992590084,
+          "available": 42.2074340292535,
+          "locked": 1.1748474708391825
+        },
+        "ADA": {
+          "balance": 415.53136893943554,
+          "available": 377.5094550670673,
+          "locked": 74.30600376206255
+        },
+        "DOT": {
+          "balance": 22.487831496193145,
+          "available": 21.533873466495734,
+          "locked": 0.08849663354563277
+        },
+        "LINK": {
+          "balance": 19.08448379507915,
+          "available": 16.858764103996855,
+          "locked": 1.065284882275142
+        },
+        "AVAX": {
+          "balance": 16.519072956698707,
+          "available": 14.6579955195112,
+          "locked": 1.2114861230715925
+        }
+      }
+    },
+    {
+      "id": 11,
+      "email": "hougshougdfhoug@mail.ru",
+      "password": "$2a$10$MGMgnePH55JZYk2Tq1bEbuNy/v9VIPpZXhWN02FOOZl0uGsp2A2t2",
+      "firstName": "ппп",
+      "lastName": "пппп",
+      "accountType": "basic",
+      "token": "user-token-11-1756318873251",
+      "created": "2025-08-27T18:21:13.251Z",
+      "balances": {
+        "USD": {
+          "balance": 1000,
+          "available": 900,
+          "locked": 100
+        },
+        "BTC": {
+          "balance": 0.0009781886596830405,
+          "available": 0.0009017298949701823,
+          "locked": 0.0001384925511876485
+        },
+        "ETH": {
+          "balance": 0.008419130899196941,
+          "available": 0.006998596970974217,
+          "locked": 0.0003181253404689941
+        },
+        "SOL": {
+          "balance": 0.9559314004275901,
+          "available": 0.9309136023943627,
+          "locked": 0.17920867876180632
+        }
+      }
+    },
+    {
+      "id": 12,
+      "email": "gdfgdfsgjsgij@mail.ru",
+      "password": "$2a$10$BaRUzCOxlnQkmIVi2FYtVuSClLXxCNd1qf1yPBV0fZvjhHE0J73SK",
+      "firstName": "bob",
+      "lastName": "bbb",
+      "accountType": "basic",
+      "token": "user-token-12-1756318913480",
+      "created": "2025-08-27T18:21:53.480Z",
+      "balances": {
+        "USD": {
+          "balance": 1000,
+          "available": 900,
+          "locked": 100
+        },
+        "BTC": {
+          "balance": 0.0009012535307057813,
+          "available": 0.0007554743398445755,
+          "locked": 0.00005451991490883771
+        },
+        "ETH": {
+          "balance": 0.0106941670513935,
+          "available": 0.009340052359724056,
+          "locked": 0.00065075810459836
+        },
+        "SOL": {
+          "balance": 0.8143223809354257,
+          "available": 0.7668960046049061,
+          "locked": 0.02268287703284336
+        }
+      }
+    },
+    {
+      "id": 13,
+      "email": "testauth@example.com",
+      "password": "$2a$10$QSSqgY8qIAYacngKRidD.ezGLt0aGoeZ2CDASlXJuXcAw93bTwpNW",
+      "firstName": "Test",
+      "lastName": "Auth",
+      "accountType": "demo",
+      "token": "user-token-13-1756320047519",
+      "created": "2025-08-27T18:40:47.585Z",
+      "balances": {
+        "USD": {
+          "balance": 10000,
+          "available": 9000,
+          "locked": 1000
+        },
+        "BTC": {
+          "balance": 0.05910557001720902,
+          "available": 0.05428331724519551,
+          "locked": 0.0036590603533231936
+        },
+        "ETH": {
+          "balance": 0.48211080298868514,
+          "available": 0.4704639327205752,
+          "locked": 0.08100480644405422
+        },
+        "SOL": {
+          "balance": 11.634294924519786,
+          "available": 10.49066136746607,
+          "locked": 2.3030538452530522
+        },
+        "ADA": {
+          "balance": 113.38833173527878,
+          "available": 93.79874076440865,
+          "locked": 11.79450402859643
+        },
+        "DOT": {
+          "balance": 5.938434451724555,
+          "available": 4.908960450537668,
+          "locked": 0.08255181926909584
+        }
+      }
+    },
+    {
+      "id": 14,
+      "email": "test@test.com",
+      "password": "$2a$10$XBr8FD.1hR.hT1xh52fe0uXGnDaHCIHYe2qnDDNogRasvqEPFlZnK",
+      "firstName": "павпваы",
+      "lastName": "пваыпаыв",
+      "accountType": "demo",
+      "token": "user-token-14-1756320574667",
+      "created": "2025-08-27T18:49:34.805Z",
+      "balances": {
+        "USD": {
+          "balance": 10000,
+          "available": 9000,
+          "locked": 1000
+        },
+        "BTC": {
+          "balance": 0.044829969256563226,
+          "available": 0.03628269433294076,
+          "locked": 0.008553449889789833
+        },
+        "ETH": {
+          "balance": 0.40881895912086275,
+          "available": 0.34600372002132507,
+          "locked": 0.07709571552273492
+        },
+        "SOL": {
+          "balance": 8.936845276072143,
+          "available": 7.293794078463991,
+          "locked": 0.13698083654988694
+        },
+        "ADA": {
+          "balance": 113.26188958870318,
+          "available": 93.98510831343417,
+          "locked": 10.091954732189356
+        },
+        "DOT": {
+          "balance": 5.937386903754167,
+          "available": 5.765583267546417,
+          "locked": 0.7115617559277547
+        }
+      }
+    }
+  ],
+  "currentUserId": 15
+}

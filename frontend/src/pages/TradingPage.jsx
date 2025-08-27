@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import OrderForm from '../components/trading/OrderForm.jsx'
 import OrderBook from '../components/trading/OrderBook.jsx'
 import PriceChart from '../components/trading/PriceChart.jsx'
@@ -7,11 +8,12 @@ import AdvancedOrderForm from '../components/trading/AdvancedOrderForm.jsx'
 import MarginTradingPanel from '../components/trading/MarginTradingPanel.jsx'
 
 export default function TradingPage(){
+  const { t } = useTranslation()
   const [selectedPair, setSelectedPair] = useState('BTC/USD')
   const [activeTab, setActiveTab] = useState('spot') // spot, advanced, margin
 
   const tabs = [
-    { id: 'spot', label: 'SPOT TRADING', icon: '📈' },
+    { id: 'spot', label: t('markets.spot').toUpperCase() + ' TRADING', icon: '📈' },
     { id: 'advanced', label: 'ADVANCED ORDERS', icon: '⚡' },
     { id: 'margin', label: 'MARGIN TRADING', icon: '💰' }
   ]

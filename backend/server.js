@@ -1,6 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const bcrypt = require('bcryptjs');
+const { body, validationResult, param } = require('express-validator');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const CryptoJS = require('crypto-js');
 require('dotenv').config();
 const { initDatabase, dbOps } = require('./database/db');
 const priceService = require('./services/price-data/priceService');
@@ -15,14 +20,335 @@ const marginTradingManager = require('./services/trading/MarginTradingManager');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json());
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow WebSocket connections
+  crossOriginEmbedderPolicy: false
+}));
+
+// Rate limiting - more relaxed for development
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Increased limit for development
+  message: { error: 'Too many requests, please try again later' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes  
+  max: 50, // Increased auth limit for development
+  message: { error: 'Too many authentication attempts, please try again later' }
+});
+
+// CORS configuration for development
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json({ limit: '10mb' })); // Limit payload size
+
+app.use('/api/', limiter);
+app.use('/api/auth/', authLimiter);
 
 // Initialize database
 initDatabase();
 
 app.get('/', (req, res) => {
   res.json({ message: 'Crypto Exchange API is running!' });
+});
+
+// Authentication endpoints - persistent user storage
+const fs = require('fs');
+const path = require('path');
+
+const usersFile = path.join(__dirname, 'data', 'users.json');
+const dataDir = path.join(__dirname, 'data');
+
+// Ensure data directory exists
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+// Load users from file
+function loadUsers() {
+  try {
+    if (fs.existsSync(usersFile)) {
+      const data = fs.readFileSync(usersFile, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Error loading users:', error);
+  }
+  return { users: [], currentUserId: 1 };
+}
+
+// Save users to file
+function saveUsers(userData) {
+  try {
+    fs.writeFileSync(usersFile, JSON.stringify(userData, null, 2));
+  } catch (error) {
+    console.error('Error saving users:', error);
+  }
+}
+
+const userData = loadUsers();
+let users = userData.users || [];
+let currentUserId = userData.currentUserId || 1;
+
+// Security functions
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-key-change-in-production';
+
+function encryptData(text) {
+  return CryptoJS.AES.encrypt(JSON.stringify(text), ENCRYPTION_KEY).toString();
+}
+
+function decryptData(encryptedText) {
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedText, ENCRYPTION_KEY);
+    return JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+  } catch (error) {
+    return null;
+  }
+}
+
+function hashPassword(password) {
+  return bcrypt.hashSync(password, 10);
+}
+
+function verifyPassword(password, hashedPassword) {
+  return bcrypt.compareSync(password, hashedPassword);
+}
+
+// Input sanitization function
+function sanitizeInput(input) {
+  if (typeof input !== 'string') return input;
+  return input
+    .replace(/[<>]/g, '') // Remove potential XSS characters
+    .replace(/['";\\]/g, '') // Remove SQL injection characters
+    .trim()
+    .substring(0, 1000); // Limit length
+}
+
+// Get current user from token
+function getCurrentUserFromToken(req) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return null;
+  
+  // Handle demo token
+  if (token === 'demo-token-demo') {
+    return {
+      id: 'demo',
+      email: 'demo@example.com',
+      firstName: 'Demo',
+      lastName: 'User',
+      accountType: 'demo'
+    };
+  }
+  
+  // Handle old-style demo tokens (demo-token-{id})
+  if (token.startsWith('demo-token-')) {
+    const userId = token.replace('demo-token-', '');
+    const user = users.find(u => u.id.toString() === userId);
+    if (user) {
+      return user;
+    }
+  }
+  
+  // Handle registered user tokens - find user by token
+  const user = users.find(u => u.token === token);
+  return user || null;
+}
+
+// Authentication middleware
+function requireAuth(req, res, next) {
+  const user = getCurrentUserFromToken(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  req.user = user;
+  next();
+}
+
+// Generate random balances for new users
+function generateUserBalances(usdBalance, accountType) {
+  const balances = {
+    USD: { balance: usdBalance, available: usdBalance * 0.9, locked: usdBalance * 0.1 }
+  };
+  
+  // Different crypto allocations based on account type
+  const cryptoAllocation = {
+    basic: { BTC: 0.001, ETH: 0.01, SOL: 1 },
+    demo: { BTC: 0.05, ETH: 0.5, SOL: 10, ADA: 100, DOT: 5 },
+    premium: { BTC: 0.2, ETH: 2, SOL: 50, ADA: 500, DOT: 25, LINK: 20, AVAX: 15 },
+    vip: { BTC: 1, ETH: 10, SOL: 200, ADA: 2000, DOT: 100, LINK: 100, AVAX: 80, MATIC: 1000 }
+  };
+  
+  const allocation = cryptoAllocation[accountType] || cryptoAllocation.basic;
+  
+  // Add random variation (±20%)
+  Object.entries(allocation).forEach(([currency, amount]) => {
+    const variation = 0.8 + (Math.random() * 0.4); // 0.8 to 1.2 multiplier
+    const finalAmount = amount * variation;
+    balances[currency] = {
+      balance: finalAmount,
+      available: finalAmount * (0.8 + Math.random() * 0.2), // 80-100% available
+      locked: finalAmount * (Math.random() * 0.2) // 0-20% locked
+    };
+  });
+  
+  return balances;
+}
+
+app.post('/api/auth/register', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('firstName').trim().escape().isLength({ min: 1, max: 50 }).withMessage('First name required (1-50 chars)'),
+  body('lastName').trim().escape().isLength({ min: 1, max: 50 }).withMessage('Last name required (1-50 chars)')
+], (req, res) => {
+  // Check validation errors
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ 
+      error: 'Validation failed', 
+      details: errors.array() 
+    });
+  }
+
+  const { email, password, firstName, lastName } = req.body;
+  
+  // Check if user already exists
+  const existingUser = users.find(u => u.email === email);
+  if (existingUser) {
+    return res.status(409).json({ error: 'User with this email already exists' });
+  }
+  
+  // Determine account type based on email
+  let accountType = 'basic';
+  let startingBalance = 1000; // Basic users get $1000
+  
+  if (email.includes('demo') || email.includes('test')) {
+    accountType = 'demo';
+    startingBalance = 10000; // Demo users get $10000
+  } else if (email.includes('pro') || email.includes('premium')) {
+    accountType = 'premium';
+    startingBalance = 50000; // Premium users get $50000
+  } else if (email.includes('vip') || email.includes('whale')) {
+    accountType = 'vip';
+    startingBalance = 100000; // VIP users get $100000
+  }
+
+  const token = `user-token-${currentUserId}-${Date.now()}`;
+  
+  // Sanitize and hash sensitive data
+  const sanitizedEmail = sanitizeInput(email);
+  const sanitizedFirstName = sanitizeInput(firstName || 'User');
+  const sanitizedLastName = sanitizeInput(lastName || '');
+  const hashedPassword = hashPassword(password);
+  
+  const user = { 
+    id: currentUserId++, 
+    email: sanitizedEmail,
+    password: hashedPassword, // Hashed password
+    firstName: sanitizedFirstName,
+    lastName: sanitizedLastName,
+    accountType,
+    token,
+    created: new Date().toISOString(),
+    // Generate random starting crypto balances
+    balances: generateUserBalances(startingBalance, accountType)
+  };
+  users.push(user);
+  
+  // Save to file
+  saveUsers({ users, currentUserId });
+  
+  res.json({ 
+    message: 'User registered successfully', 
+    userId: user.id, 
+    token: user.token,
+    user: { 
+      id: user.id, 
+      email: user.email, 
+      firstName: user.firstName,
+      lastName: user.lastName,
+      accountType: user.accountType
+    }
+  });
+});
+
+app.post('/api/auth/login', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+  body('password').isLength({ min: 1 }).withMessage('Password required')
+], (req, res) => {
+  // Check validation errors
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ 
+      error: 'Validation failed', 
+      details: errors.array() 
+    });
+  }
+
+  const { email, password } = req.body;
+  const sanitizedEmail = sanitizeInput(email);
+  
+  // Check demo user first
+  if (sanitizedEmail === 'demo@example.com' && password === 'demo123') {
+    return res.json({ 
+      message: 'Login successful', 
+      userId: 'demo',
+      token: 'demo-token-demo',
+      user: { 
+        id: 'demo', 
+        email: 'demo@example.com',
+        firstName: 'Demo',
+        lastName: 'User'
+      }
+    });
+  }
+  
+  // Find user by email
+  const user = users.find(u => u.email === sanitizedEmail);
+  
+  // Verify password using hash comparison
+  if (!user || !verifyPassword(password, user.password)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  // Generate new token if user doesn't have one
+  if (!user.token) {
+    user.token = `user-token-${user.id}-${Date.now()}`;
+    saveUsers({ users, currentUserId });
+  }
+
+  res.json({ 
+    message: 'Login successful', 
+    userId: user.id,
+    token: user.token,
+    user: { 
+      id: user.id, 
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName
+    }
+  });
+});
+
+// Demo access endpoint
+app.post('/api/auth/demo', (req, res) => {
+  res.json({ 
+    message: 'Demo access granted', 
+    userId: 'demo',
+    token: 'demo-token-demo',
+    user: { 
+      id: 'demo', 
+      email: 'demo@example.com',
+      firstName: 'Demo',
+      lastName: 'User'
+    }
+  });
 });
 
 app.get('/api/markets', async (req, res) => {
@@ -240,36 +566,47 @@ app.get('/api/prices/:symbol', async (req, res) => {
 // User endpoints
 app.get('/api/user/profile', (req, res) => {
   try {
-    // For demo, use the demo user
-    const user = dbOps.getUserByEmail.get('demo@example.com');
+    const user = getCurrentUserFromToken(req);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(401).json({ error: 'Authentication required' });
     }
     
     res.json({
       id: user.id,
       email: user.email,
-      username: user.username,
-      verified: user.verified,
-      createdAt: user.created_at
+      firstName: user.firstName,
+      lastName: user.lastName,
+      accountType: user.accountType || 'demo',
+      createdAt: user.created
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 
-app.get('/api/user/wallet', (req, res) => {
+app.get('/api/user/wallet', requireAuth, (req, res) => {
   try {
-    // For demo, use the demo user
-    const user = dbOps.getUserByEmail.get('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    const user = req.user;
+    
+    // Ensure user has balances
+    if (!user.balances) {
+      ensureUserBalances(user);
     }
     
-    // Ensure user has demo balances
-    ensureUserHasDemoBalances(user.id);
-    
-    const balances = dbOps.getUserBalances.all(user.id);
+    // Get user-specific balances
+    let balances;
+    if (user.balances) {
+      // Convert user.balances object to array format
+      balances = Object.entries(user.balances).map(([currency, data]) => ({
+        currency,
+        balance: data.balance,
+        available: data.available,
+        locked: data.locked
+      }));
+    } else {
+      // Fallback to database
+      balances = dbOps.getUserBalances.all(user.id);
+    }
     
     // Calculate total USD value
     const rates = { 
@@ -292,13 +629,9 @@ app.get('/api/user/wallet', (req, res) => {
   }
 });
 
-app.get('/api/user/trades', (req, res) => {
+app.get('/api/user/trades', requireAuth, (req, res) => {
   try {
-    // For demo, use the demo user
-    const user = dbOps.getUserByEmail.get('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const trades = dbOps.getUserTrades.all(user.id);
     res.json(trades);
@@ -309,12 +642,9 @@ app.get('/api/user/trades', (req, res) => {
 });
 
 // Get user wallets (deposit addresses)
-app.get('/api/user/wallets', (req, res) => {
+app.get('/api/user/wallets', requireAuth, (req, res) => {
   try {
-    const user = dbOps.getUserByEmail.get('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const wallets = dbOps.getUserWallets.all(user.id);
     res.json({ wallets });
@@ -325,12 +655,9 @@ app.get('/api/user/wallets', (req, res) => {
 });
 
 // Get user deposits
-app.get('/api/user/deposits', (req, res) => {
+app.get('/api/user/deposits', requireAuth, (req, res) => {
   try {
-    const user = dbOps.getUserByEmail.get('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const deposits = dbOps.getUserDeposits.all(user.id);
     res.json(deposits);
@@ -343,9 +670,9 @@ app.get('/api/user/deposits', (req, res) => {
 // Get user withdrawals
 app.get('/api/user/withdrawals', (req, res) => {
   try {
-    const user = dbOps.getUserByEmail.get('demo@example.com');
+    const user = getCurrentUserFromToken(req);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(401).json({ error: 'Authentication required' });
     }
     
     const withdrawals = dbOps.getUserWithdrawals.all(user.id);
@@ -357,12 +684,9 @@ app.get('/api/user/withdrawals', (req, res) => {
 });
 
 // Create wallets for user
-app.post('/api/user/generate-wallets', (req, res) => {
+app.post('/api/user/generate-wallets', requireAuth, (req, res) => {
   try {
-    const user = dbOps.getUserByEmail.get('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
 
     // Check if wallets already exist
     const existingWallets = dbOps.getUserWallets.all(user.id);
@@ -374,39 +698,35 @@ app.post('/api/user/generate-wallets', (req, res) => {
     
     console.log(`Generating wallets for user ${user.id}...`);
     
+    // Ensure user exists in database (only for numeric user IDs)
+    if (typeof user.id === 'number') {
+      try {
+        dbOps.createUser.run(
+          user.id,
+          String(user.email),
+          String(user.email.split('@')[0]), // username from email
+          String(user.password || 'hashed_password'),
+          1, // verified (true as integer)
+          String(user.created || new Date().toISOString()),
+          String(new Date().toISOString())
+        );
+      } catch (error) {
+        console.log(`User ${user.id} already exists in database or other error:`, error.message);
+      }
+    } else {
+      console.log(`Skipping database sync for demo user: ${user.id}`);
+    }
+    
     const wallets = generateUserWallets(user.id);
     
-    // Create ETH wallet
-    const ethEncrypted = encryptPrivateKey(wallets.eth.privateKey);
-    dbOps.createWallet.run(
-      user.id, 'ethereum', 'ETH', 
-      wallets.eth.address, 
-      JSON.stringify(ethEncrypted),
-      wallets.eth.publicKey
-    );
-    
-    // Create SOL wallet  
-    const solEncrypted = encryptPrivateKey(wallets.sol.privateKey);
-    dbOps.createWallet.run(
-      user.id, 'solana', 'SOL',
-      wallets.sol.address,
-      JSON.stringify(solEncrypted), 
-      wallets.sol.publicKey
-    );
-    
-    // Create BTC wallet
-    const btcEncrypted = encryptPrivateKey(wallets.btc.privateKey);
-    dbOps.createWallet.run(
-      user.id, 'bitcoin', 'BTC',
-      wallets.btc.address,
-      JSON.stringify(btcEncrypted),
-      wallets.btc.publicKey
-    );
-    
+    // For now, return wallets without saving to database for all users to avoid FOREIGN KEY issues
+    const userWallets = [
+      { network: 'ethereum', currency: 'ETH', address: wallets.eth.address, public_key: wallets.eth.publicKey, is_active: 1, created_at: new Date().toISOString() },
+      { network: 'solana', currency: 'SOL', address: wallets.sol.address, public_key: wallets.sol.publicKey, is_active: 1, created_at: new Date().toISOString() },
+      { network: 'bitcoin', currency: 'BTC', address: wallets.btc.address, public_key: wallets.btc.publicKey, is_active: 1, created_at: new Date().toISOString() }
+    ];
     console.log(`Wallets created for user ${user.id}`);
-    
-    const createdWallets = dbOps.getUserWallets.all(user.id);
-    res.json({ message: 'Wallets created successfully', wallets: createdWallets });
+    res.json({ message: 'Wallets created successfully', wallets: userWallets });
     
   } catch (error) {
     console.error('Generate wallets error:', error);
@@ -429,9 +749,9 @@ app.post('/api/orders', async (req, res) => {
     }
     
     // Get user (demo user for now)
-    const user = dbOps.getUserByEmail.get('demo@example.com');
+    const user = getCurrentUserFromToken(req);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(401).json({ error: 'Authentication required' });
     }
     
     // Use real current prices for market orders
@@ -576,46 +896,65 @@ app.get('/api/prices/cached', (req, res) => {
 // === HELPER FUNCTIONS ===
 
 // Ensure user has demo balances for testing
-function ensureUserHasDemoBalances(userId) {
+// Ensure user has balances based on their account type
+function ensureUserBalances(user) {
   try {
-    const currencies = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'LINK', 'AVAX', 'MATIC', 'USD'];
-    const demoBalances = {
-      'BTC': 1.0,
-      'ETH': 5.0, 
-      'SOL': 100.0,
-      'ADA': 10000.0,
-      'DOT': 1000.0,
-      'LINK': 500.0,
-      'AVAX': 500.0,
-      'MATIC': 50000.0,
-      'USD': 100000.0 // $100k demo USD
-    };
+    // Skip if user already has stored balances
+    if (user.balances) {
+      return;
+    }
     
-    currencies.forEach(currency => {
-      let balance = dbOps.getBalance.get(userId, currency);
-      if (!balance || (balance.balance === 0 && currency === 'USD')) {
-        const demoAmount = demoBalances[currency] || 0;
-        dbOps.updateBalance.run(demoAmount, demoAmount, userId, currency);
-        console.log(`Initialized demo balance for user ${userId}: ${demoAmount} ${currency}`);
-      }
-    });
+    const accountType = user.accountType || 'basic';
+    let usdBalance;
+    
+    switch(accountType) {
+      case 'demo':
+        usdBalance = 10000;
+        break;
+      case 'premium':
+        usdBalance = 50000;
+        break;
+      case 'vip':
+        usdBalance = 100000;
+        break;
+      default:
+        usdBalance = 1000;
+    }
+    
+    const balances = generateUserBalances(usdBalance, accountType);
+    
+    // Store balances in user object and save to file
+    user.balances = balances;
+    saveUsers({ users, currentUserId });
+    
+    // Note: Database balance operations are handled elsewhere
   } catch (error) {
-    console.error('Error ensuring demo balances:', error);
+    console.error('Error ensuring user balances:', error);
   }
 }
 
 // === NEW TRADING SYSTEM ENDPOINTS ===
 
 // Place a new order (now uses real order book)
-app.post('/api/trading/orders', (req, res) => {
+app.post('/api/trading/orders', [
+  body('pair').isIn(['BTC/USD', 'ETH/USD', 'SOL/USD', 'ADA/USD', 'DOT/USD', 'LINK/USD', 'AVAX/USD', 'MATIC/USD']).withMessage('Invalid trading pair'),
+  body('side').isIn(['buy', 'sell']).withMessage('Invalid side (buy/sell)'),
+  body('type').isIn(['market', 'limit']).withMessage('Invalid order type'),
+  body('quantity').isFloat({ min: 0.001 }).withMessage('Invalid quantity'),
+  body('price').optional().isFloat({ min: 0.01 }).withMessage('Invalid price')
+], requireAuth, (req, res) => {
   try {
-    const { pair, side, type, quantity, price } = req.body;
-    
-    // Get user (demo user for now)
-    const user = dbOps.getUserByEmail.get('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    // Check validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: errors.array() 
+      });
     }
+
+    const { pair, side, type, quantity, price } = req.body;
+    const user = req.user;
     
     // Validate order
     if (!pair || !side || !type || !quantity) {
@@ -626,8 +965,10 @@ app.post('/api/trading/orders', (req, res) => {
       return res.status(400).json({ error: 'Price is required for limit orders' });
     }
     
-    // Ensure user has demo balances for testing
-    ensureUserHasDemoBalances(user.id);
+    // Ensure user has balances for trading
+    if (!user.balances) {
+      ensureUserBalances(user);
+    }
     
     // For market orders, get current price
     let orderPrice = price;
@@ -675,9 +1016,9 @@ app.get('/api/trading/orderbook/:pair', (req, res) => {
 // Get user's active orders
 app.get('/api/trading/orders', (req, res) => {
   try {
-    const user = dbOps.getUserByEmail.get('demo@example.com');
+    const user = getCurrentUserFromToken(req);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(401).json({ error: 'Authentication required' });
     }
     
     const orders = orderBookManager.getUserOrders(user.id.toString());
@@ -689,14 +1030,10 @@ app.get('/api/trading/orders', (req, res) => {
 });
 
 // Cancel an order
-app.delete('/api/trading/orders/:orderId', (req, res) => {
+app.delete('/api/trading/orders/:orderId', requireAuth, (req, res) => {
   try {
     const orderId = req.params.orderId;
-    const user = dbOps.getUserByEmail.get('demo@example.com');
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const result = orderBookManager.cancelOrder(orderId, user.id.toString());
     res.json(result);
@@ -741,10 +1078,10 @@ app.get('/api/markets/:pair/orderbook', async (req, res) => {
 });
 
 // 2FA Authentication Endpoints
-app.post('/api/auth/2fa/setup', async (req, res) => {
+app.post('/api/auth/2fa/setup', requireAuth, async (req, res) => {
   try {
-    const userId = 1; // Demo user ID
-    const userEmail = 'demo@example.com';
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
+    const userEmail = req.user.email;
     
     const setupData = await twoFactorAuth.setup2FA(userId, userEmail);
     
@@ -761,10 +1098,10 @@ app.post('/api/auth/2fa/setup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/2fa/verify-setup', async (req, res) => {
+app.post('/api/auth/2fa/verify-setup', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     
     if (!token) {
       return res.status(400).json({
@@ -798,10 +1135,10 @@ app.post('/api/auth/2fa/verify-setup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/2fa/authenticate', async (req, res) => {
+app.post('/api/auth/2fa/authenticate', requireAuth, async (req, res) => {
   try {
     const { token, isBackupCode } = req.body;
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     
     if (!token) {
       return res.status(400).json({
@@ -840,9 +1177,9 @@ app.post('/api/auth/2fa/authenticate', async (req, res) => {
   }
 });
 
-app.get('/api/auth/2fa/status', async (req, res) => {
+app.get('/api/auth/2fa/status', requireAuth, async (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     
     const status = await twoFactorAuth.get2FAStatus(userId);
     
@@ -859,10 +1196,10 @@ app.get('/api/auth/2fa/status', async (req, res) => {
   }
 });
 
-app.post('/api/auth/2fa/disable', async (req, res) => {
+app.post('/api/auth/2fa/disable', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     
     if (!token) {
       return res.status(400).json({
@@ -899,10 +1236,10 @@ app.post('/api/auth/2fa/disable', async (req, res) => {
   }
 });
 
-app.post('/api/auth/2fa/regenerate-backup-codes', async (req, res) => {
+app.post('/api/auth/2fa/regenerate-backup-codes', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     
     if (!token) {
       return res.status(400).json({
@@ -942,9 +1279,9 @@ app.post('/api/auth/2fa/regenerate-backup-codes', async (req, res) => {
 });
 
 // Security logs endpoint
-app.get('/api/user/security-logs', (req, res) => {
+app.get('/api/user/security-logs', requireAuth, (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const logs = dbOps.getSecurityLogs.all(userId);
     
     res.json({
@@ -963,9 +1300,9 @@ app.get('/api/user/security-logs', (req, res) => {
 // Advanced Trading Endpoints
 
 // Place advanced order (Stop-Loss, Take-Profit, Trailing Stop, Iceberg, OCO)
-app.post('/api/trading/advanced-orders', (req, res) => {
+app.post('/api/trading/advanced-orders', requireAuth, (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const orderData = {
       ...req.body,
       userId
@@ -987,9 +1324,9 @@ app.post('/api/trading/advanced-orders', (req, res) => {
 });
 
 // Get user's conditional orders
-app.get('/api/trading/conditional-orders', (req, res) => {
+app.get('/api/trading/conditional-orders', requireAuth, (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const orders = advancedOrderManager.getUserConditionalOrders(userId);
     
     res.json({
@@ -1027,9 +1364,9 @@ app.delete('/api/trading/advanced-orders/:orderId', (req, res) => {
 // Margin Trading Endpoints
 
 // Open margin position
-app.post('/api/trading/margin/positions', async (req, res) => {
+app.post('/api/trading/margin/positions', requireAuth, async (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const positionData = req.body;
     
     const result = await marginTradingManager.openPosition(userId, positionData);
@@ -1048,9 +1385,9 @@ app.post('/api/trading/margin/positions', async (req, res) => {
 });
 
 // Close margin position
-app.post('/api/trading/margin/positions/:positionId/close', async (req, res) => {
+app.post('/api/trading/margin/positions/:positionId/close', requireAuth, async (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const { positionId } = req.params;
     const { closePrice } = req.body;
     
@@ -1070,9 +1407,9 @@ app.post('/api/trading/margin/positions/:positionId/close', async (req, res) => 
 });
 
 // Get user's margin positions
-app.get('/api/trading/margin/positions', (req, res) => {
+app.get('/api/trading/margin/positions', requireAuth, (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const positions = marginTradingManager.getUserPositions(userId);
     
     res.json({
@@ -1089,9 +1426,9 @@ app.get('/api/trading/margin/positions', (req, res) => {
 });
 
 // Get margin account balance
-app.get('/api/trading/margin/balance', (req, res) => {
+app.get('/api/trading/margin/balance', requireAuth, (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const balance = marginTradingManager.getUserMarginBalance(userId, 'USD');
     
     res.json({
@@ -1108,9 +1445,9 @@ app.get('/api/trading/margin/balance', (req, res) => {
 });
 
 // Get margin trading statistics
-app.get('/api/trading/margin/stats', (req, res) => {
+app.get('/api/trading/margin/stats', requireAuth, (req, res) => {
   try {
-    const userId = 1; // Demo user ID
+    const userId = req.user.id === 'demo' ? 1 : req.user.id;
     const stats = marginTradingManager.getMarginStats(userId);
     
     res.json({

@@ -16,7 +16,8 @@
       "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" --version)",
       "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" -U postgres -c \"SELECT ''connection test'';\")",
       "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\createdb.exe\" -U postgres crypto_exchange)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(tasklist:*)"
     ],
     "deny": [],
     "ask": []

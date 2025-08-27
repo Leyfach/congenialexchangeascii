@@ -13,10 +13,20 @@ class PostgreSQLDatabase {
       database: process.env.DB_NAME || 'crypto_exchange',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      max: process.env.DB_POOL_MAX || 50, // Increased pool size
+      min: process.env.DB_POOL_MIN || 5,  // Minimum connections
+      idleTimeoutMillis: 60000, // Increased idle timeout
+      connectionTimeoutMillis: 5000, // Increased connection timeout
+      acquireTimeoutMillis: 10000, // Add acquire timeout
+      createTimeoutMillis: 5000, // Add create timeout
+      destroyTimeoutMillis: 5000, // Add destroy timeout
+      reapIntervalMillis: 10000, // Check for idle connections every 10s
+      createRetryIntervalMillis: 500, // Retry failed connections every 500ms
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      // Performance optimizations
+      application_name: 'crypto_exchange',
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000
     });
 
     this.pool.on('error', (err) => {
@@ -273,15 +283,71 @@ class PostgreSQLDatabase {
         )
       `);
 
-      // Create indexes for performance
+      // Create comprehensive indexes for performance
+      console.log('Creating performance indexes...');
+      
+      // User indexes
       await this.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC)');
+      
+      // Balance indexes
       await this.query('CREATE INDEX IF NOT EXISTS idx_user_balances_user_currency ON user_balances(user_id, currency)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_user_balances_currency ON user_balances(currency)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_user_balances_updated_at ON user_balances(updated_at DESC)');
+      
+      // Balance audit indexes
+      await this.query('CREATE INDEX IF NOT EXISTS idx_balance_audit_user_created ON balance_audit(user_id, created_at DESC)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_balance_audit_reference ON balance_audit(reference_id, reference_type)');
+      
+      // Order indexes  
       await this.query('CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_orders_pair_status ON orders(pair, status)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_orders_filled_at ON orders(filled_at DESC) WHERE filled_at IS NOT NULL');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_orders_expires_at ON orders(expires_at) WHERE expires_at IS NOT NULL');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_orders_price_side ON orders(pair, side, price) WHERE status IN (\'pending\', \'partial\')');
+      
+      // Trade indexes
       await this.query('CREATE INDEX IF NOT EXISTS idx_trades_user_created ON trades(user_id, created_at DESC)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_trades_pair_created ON trades(pair, created_at DESC)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_trades_order_id ON trades(order_id)');
+      
+      // Wallet indexes
+      await this.query('CREATE INDEX IF NOT EXISTS idx_user_wallets_user_network ON user_wallets(user_id, network)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_user_wallets_address ON user_wallets(address)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_user_wallets_active ON user_wallets(is_active) WHERE is_active = true');
+      
+      // Deposit indexes
       await this.query('CREATE INDEX IF NOT EXISTS idx_deposits_user_status ON deposits(user_id, status)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_deposits_tx_hash ON deposits(tx_hash) WHERE tx_hash IS NOT NULL');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_deposits_confirmations ON deposits(confirmations, status)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_deposits_created_at ON deposits(created_at DESC)');
+      
+      // Withdrawal indexes
       await this.query('CREATE INDEX IF NOT EXISTS idx_withdrawals_user_status ON withdrawals(user_id, status)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_withdrawals_tx_hash ON withdrawals(tx_hash) WHERE tx_hash IS NOT NULL');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_withdrawals_created_at ON withdrawals(created_at DESC)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_withdrawals_approval ON withdrawals(approval_required, status)');
+      
+      // API key indexes
+      await this.query('CREATE INDEX IF NOT EXISTS idx_api_keys_user_active ON api_keys(user_id, is_active)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_api_keys_last_used ON api_keys(last_used_at DESC) WHERE last_used_at IS NOT NULL');
+      
+      // Security log indexes
       await this.query('CREATE INDEX IF NOT EXISTS idx_security_logs_user_event ON security_logs(user_id, event_type, created_at DESC)');
-
+      await this.query('CREATE INDEX IF NOT EXISTS idx_security_logs_ip ON security_logs(ip_address, created_at DESC)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_security_logs_created_at ON security_logs(created_at DESC)');
+      
+      // Composite indexes for common queries
+      await this.query('CREATE INDEX IF NOT EXISTS idx_orders_user_pair_status ON orders(user_id, pair, status)');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_trades_user_pair_created ON trades(user_id, pair, created_at DESC)');
+      
+      // Partial indexes for better performance on filtered queries
+      await this.query('CREATE INDEX IF NOT EXISTS idx_orders_active ON orders(pair, side, price, created_at) WHERE status IN (\'pending\', \'partial\')');
+      await this.query('CREATE INDEX IF NOT EXISTS idx_withdrawals_pending ON withdrawals(created_at DESC) WHERE status = \'pending\'');
+      
+      console.log('Performance indexes created successfully');
       console.log('PostgreSQL database initialized successfully');
       
       // Create demo user

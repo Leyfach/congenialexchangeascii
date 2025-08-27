@@ -6,15 +6,9 @@ const api = axios.create({ baseURL: API_BASE_URL })
 
 api.interceptors.request.use((config) => {
   const token = authService.getToken()
-  // Check if token looks like a valid JWT (has 3 parts separated by dots)
+  // Allow demo tokens and JWT tokens
   if (token && token.trim() && token !== 'null' && token !== 'undefined') {
-    const parts = token.split('.')
-    if (parts.length === 3) {
-      config.headers.Authorization = `Bearer ${token}`
-    } else {
-      // Clear invalid demo token
-      authService.logout()
-    }
+    config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })

@@ -1,9 +1,10 @@
 const axios = require('axios');
+const redisCache = require('../cache/RedisCache');
 
 class PriceService {
   constructor() {
     this.baseURL = 'https://api.coingecko.com/api/v3';
-    this.cache = new Map();
+    this.cache = new Map(); // Fallback local cache
     this.cacheExpiry = 300000; // 5 minute cache to reduce API calls
     
     // CoinGecko API coin mapping
@@ -22,10 +23,21 @@ class PriceService {
   // Get current prices for multiple coins
   async getCurrentPrices(coins) {
     const cacheKey = `prices_${coins.join(',')}`;
-    const cached = this.cache.get(cacheKey);
     
-    if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
-      return cached.data;
+    // Try Redis cache first
+    let cached = await redisCache.get(cacheKey);
+    if (!cached) {
+      // Fallback to local cache
+      cached = this.cache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+        cached = cached.data;
+      } else {
+        cached = null;
+      }
+    }
+    
+    if (cached && cached.timestamp && Date.now() - cached.timestamp < this.cacheExpiry) {
+      return cached;
     }
 
     try {
@@ -65,7 +77,13 @@ class PriceService {
         }
       });
 
-      // Cache the result
+      // Cache the result in both Redis and local cache
+      const dataWithTimestamp = {
+        ...priceData,
+        timestamp: Date.now()
+      };
+      
+      await redisCache.set(cacheKey, dataWithTimestamp, 300); // 5 minutes TTL
       this.cache.set(cacheKey, {
         data: priceData,
         timestamp: Date.now()
@@ -144,18 +162,35 @@ class PriceService {
   // Get market data for trading pairs
   async getMarketData() {
     const coins = Object.keys(this.coinMapping);
-    const prices = await this.getCurrentPrices(coins);
     
-    return coins.map(coin => {
-      const data = prices[coin] || this.getMockPrices([coin])[coin];
-      return {
-        pair: `${coin}/USD`,
-        price: data.price,
-        change: data.change24h > 0 ? `+${data.change24h.toFixed(2)}%` : `${data.change24h.toFixed(2)}%`,
-        volume: data.volume24h,
-        marketCap: data.marketCap
-      };
-    });
+    try {
+      const prices = await this.getCurrentPrices(coins);
+      
+      return coins.map(coin => {
+        const data = prices[coin] || this.getMockPrices([coin])[coin];
+        return {
+          pair: `${coin}/USD`,
+          price: data.price,
+          change: data.change24h > 0 ? `+${data.change24h.toFixed(2)}%` : `${data.change24h.toFixed(2)}%`,
+          volume: data.volume24h,
+          marketCap: data.marketCap
+        };
+      });
+    } catch (error) {
+      console.error('Error in getMarketData, using mock data:', error.message);
+      // Return mock data directly
+      const mockPrices = this.getMockPrices(coins);
+      return coins.map(coin => {
+        const data = mockPrices[coin];
+        return {
+          pair: `${coin}/USD`,
+          price: data.price,
+          change: data.change24h > 0 ? `+${data.change24h.toFixed(2)}%` : `${data.change24h.toFixed(2)}%`,
+          volume: data.volume24h,
+          marketCap: data.marketCap
+        };
+      });
+    }
   }
 
   // Fallback mock data

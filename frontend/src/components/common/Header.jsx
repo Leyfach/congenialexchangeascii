@@ -1,7 +1,10 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { authService } from '../../services/auth.js'
+import LanguageSwitch from './LanguageSwitch'
 
 export default function Header() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const user = authService.getCurrentUser()
 
@@ -21,23 +24,42 @@ export default function Header() {
           <span className="tracking-[0.3em] text-neon-matrix">NEON MATRIX EXCHANGE</span>
         </Link>
         <nav className="hidden md:flex items-center gap-6">
-          <NavLink to="/markets" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>MARKETS</NavLink>
-          <NavLink to="/trading" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>TRADING</NavLink>
-          <NavLink to="/wallet" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>WALLET</NavLink>
-          <NavLink to="/dashboard" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>DASHBOARD</NavLink>
-          <NavLink to="/account" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>ACCOUNT</NavLink>
-          <NavLink to="/security" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>SECURITY</NavLink>
+          <NavLink to="/markets" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>
+            {t('nav.markets', 'MARKETS').toUpperCase()}
+          </NavLink>
+          <NavLink to="/trading" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>
+            {t('nav.trading', 'TRADING').toUpperCase()}
+          </NavLink>
+          <NavLink to="/wallet" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>
+            {t('nav.wallet', 'WALLET').toUpperCase()}
+          </NavLink>
+          <NavLink to="/dashboard" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>
+            {t('nav.dashboard', 'DASHBOARD').toUpperCase()}
+          </NavLink>
+          <NavLink to="/account" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>
+            {t('nav.account', 'ACCOUNT').toUpperCase()}
+          </NavLink>
+          <NavLink to="/security" className={({isActive})=>`hover:text-neon-matrix ${isActive?'text-neon-matrix':''}`}>
+            {t('nav.security', 'SECURITY').toUpperCase()}
+          </NavLink>
         </nav>
         <div className="flex items-center gap-3">
+          <LanguageSwitch className="hidden sm:block" />
           {user ? (
             <>
-              <span className="text-green-300/80 hidden sm:block">{user.firstName} {user.lastName}</span>
-              <button onClick={logout} className="ascii-btn">LOG OUT</button>
+              {/* Username removed to prevent UI interference */}
+              <button onClick={logout} className="ascii-btn">
+                {t('nav.logout', 'LOG OUT').toUpperCase()}
+              </button>
             </>
           ) : (
             <>
-              <Link className="ascii-btn" to="/login">LOGIN</Link>
-              <Link className="ascii-btn callout" to="/register">REGISTER</Link>
+              <Link className="ascii-btn" to="/login">
+                {t('nav.login', 'LOGIN').toUpperCase()}
+              </Link>
+              <Link className="ascii-btn callout" to="/register">
+                {t('nav.register', 'REGISTER').toUpperCase()}
+              </Link>
             </>
           )}
         </div>

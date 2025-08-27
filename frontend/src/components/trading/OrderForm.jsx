@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../../services/api.js'
 import { authService } from '../../services/auth.js'
 import tradingWebSocket from '../../services/websocket-trading.js'
 
 export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState({ pair, type: 'limit', side: 'buy', amount: '', price: '' })
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
@@ -196,7 +198,7 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
   return (
     <div className="card ascii-border">
       <div className="card-header">
-        <h3 className="card-title">ORDER_FORM ▷ {pair}</h3>
+        <h3 className="card-title">{t('trading.orderForm').toUpperCase()} ▷ {pair}</h3>
         <span className="badge-green">SIM</span>
       </div>
       <form onSubmit={submit} className="grid grid-cols-2 gap-3">
@@ -244,7 +246,9 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
             </div>
           </div>
         )}
-        <button className="ascii-btn col-span-2 py-2 glow" disabled={loading}>{loading?'SENDING…':'PLACE ORDER'}</button>
+        <button className="ascii-btn col-span-2 py-2 glow" disabled={loading}>
+          {loading ? t('common.loading').toUpperCase() + '…' : t('trading.placeOrder', { type: '' }).toUpperCase()}
+        </button>
         
         {/* Wallet Balance Display */}
         {Object.keys(wallets).length > 0 ? (

@@ -232,6 +232,12 @@ function initDatabase() {
   // Initialize prepared statements after tables are created
   dbOps.getUserByEmail = db.prepare('SELECT * FROM users WHERE email = ?');
   
+  dbOps.createUser = db.prepare(`
+    INSERT INTO users (id, email, username, password_hash, verified, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO NOTHING
+  `);
+  
   dbOps.getUserBalances = db.prepare(`
     SELECT currency, balance, available 
     FROM user_balances 

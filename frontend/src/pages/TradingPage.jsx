@@ -20,23 +20,47 @@ export default function TradingPage(){
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Trading Mode Tabs */}
       <div className="card ascii-border">
-        <div className="flex border-b border-gray-600">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-6 py-3 text-sm font-bold border-r border-gray-600 transition-colors ${
-                activeTab === tab.id 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              <span className="mr-2">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+  <div className="flex items-stretch border-b border-gray-600 bg-[#0a0a0a]">
+    {tabs.map(tab => {
+      const isActive = activeTab === tab.id
+      return (
+        <button
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          className={[
+            'relative px-4 py-2 md:px-6 md:py-3',
+            'font-mono text-xs md:text-sm tracking-wider',
+            'border-r border-gray-600',
+            'overflow-hidden',
+            'focus:outline-none focus-visible:ring-1 focus-visible:ring-green-500',
+            'active:scale-95' // импульс при клике
+          ].join(' ')}
+          aria-pressed={isActive}
+        >
+          {/* Пульсирующий фон */}
+          <span
+            className={[
+              'absolute inset-0 rounded-sm',
+              'bg-green-500 opacity-0',
+              'transition-opacity duration-500 ease-out',
+              isActive ? 'opacity-10 animate-pulse' : ''
+            ].join(' ')}
+          />
+          <span
+            className={[
+              'relative whitespace-nowrap select-none',
+              'transition-transform duration-200',
+              isActive ? 'scale-105' : 'scale-100'
+            ].join(' ')}
+          >
+            {isActive ? `[ ${tab.label} ]` : `  ${tab.label}  `}
+          </span>
+        </button>
+      )
+    })}
+  </div>
+</div>
+
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">

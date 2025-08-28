@@ -19,7 +19,7 @@ export default function LandingPage(){
 
             {/* ambient labels */}
             <div className="flex flex-wrap gap-2 pt-2">
-  {['SPOT', 'MARGIN', 'ADVANCED'].map(tag => (
+  {['SPOT', 'ADVANCED', 'MARGIN'].map(tag => (
     <Link
       key={tag}
       to="/trading"

@@ -20,10 +20,31 @@ const marginTradingManager = require('./services/trading/MarginTradingManager');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware
+// Security middleware with enhanced configuration
 app.use(helmet({
-  contentSecurityPolicy: false, // Allow WebSocket connections
-  crossOriginEmbedderPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for React
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts for development
+      connectSrc: ["'self'", "ws://localhost:*", "wss://localhost:*"], // WebSocket support
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // For WebSocket compatibility
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  frameguard: { action: 'deny' },
+  xssFilter: true,
+  referrerPolicy: { policy: 'same-origin' }
 }));
 
 // Rate limiting - more relaxed for development
@@ -39,18 +60,154 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts, please try again later' }
 });
 
-// CORS configuration for development
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'],
+// Trading rate limiter - stricter limits for trading operations
+const tradingLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // Max 30 trades per minute per IP
+  message: { error: 'Too many trading requests, please slow down' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Wallet/balance check limiter 
+const walletLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // Max 100 wallet checks per minute
+  message: { error: 'Too many wallet requests, please slow down' }
+});
+
+// CORS configuration with security enhancements
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow localhost origins for development
+    const allowedOrigins = [
+      'http://localhost:5173', 
+      'http://localhost:5174', 
+      'http://localhost:5175', 
+      'http://localhost:3000'
+    ];
+    
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[SECURITY] Blocked CORS request from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+  maxAge: 86400, // Cache preflight for 24 hours
+  optionsSuccessStatus: 200
+};
 
-app.use(express.json({ limit: '10mb' })); // Limit payload size
+app.use(cors(corsOptions));
+
+app.use(express.json({ 
+  limit: '10mb', // Limit payload size
+  verify: (req, res, buf) => {
+    // Basic JSON bomb protection
+    if (buf.length > 10 * 1024 * 1024) { // 10MB
+      throw new Error('Request too large');
+    }
+  }
+}));
 
 app.use('/api/', limiter);
 app.use('/api/auth/', authLimiter);
+app.use('/api/trading/orders', tradingLimiter); // Trading operations
+app.use('/api/trading/margin/', tradingLimiter); // Margin trading
+app.use('/api/user/wallet', walletLimiter); // Wallet balance checks
+
+// Security middleware for request sanitization
+const sanitizeRequest = (req, res, next) => {
+  // Remove null bytes and suspicious patterns
+  const sanitize = (obj) => {
+    if (typeof obj === 'string') {
+      return obj.replace(/\0/g, '').trim();
+    }
+    if (typeof obj === 'object' && obj !== null) {
+      const sanitized = {};
+      for (const [key, value] of Object.entries(obj)) {
+        sanitized[key] = sanitize(value);
+      }
+      return sanitized;
+    }
+    return obj;
+  };
+  
+  if (req.body) req.body = sanitize(req.body);
+  if (req.query) req.query = sanitize(req.query);
+  if (req.params) req.params = sanitize(req.params);
+  
+  next();
+};
+
+// Apply sanitization to all API routes
+app.use('/api/', sanitizeRequest);
+
+// Request logging middleware for security monitoring
+const securityLogger = (req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const ip = req.ip || req.connection.remoteAddress;
+  const userAgent = req.get('User-Agent') || 'unknown';
+  
+  // Log suspicious patterns
+  const suspiciousPatterns = [
+    /script/i, /javascript/i, /vbscript/i, /onload/i, /onclick/i,
+    /eval\(/i, /expression\(/i, /\/\*.*\*\//i, /union.*select/i,
+    /<iframe/i, /<object/i, /<embed/i, /<form/i
+  ];
+  
+  const bodyStr = JSON.stringify(req.body || {});
+  const isSuspicious = suspiciousPatterns.some(pattern => 
+    pattern.test(bodyStr) || pattern.test(req.url)
+  );
+  
+  if (isSuspicious) {
+    console.warn(`[SECURITY ALERT] ${timestamp} - Suspicious request from ${ip}:`, {
+      url: req.url,
+      method: req.method,
+      userAgent,
+      body: req.body
+    });
+  }
+  
+  next();
+};
+
+app.use('/api/', securityLogger);
+
+// Additional security middleware
+const additionalSecurityHeaders = (req, res, next) => {
+  // Prevent MIME sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // XSS protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // Prevent information disclosure
+  res.removeHeader('X-Powered-By');
+  res.removeHeader('Server');
+  
+  // Cache control for sensitive endpoints
+  if (req.path.includes('/api/auth/') || req.path.includes('/api/trading/') || req.path.includes('/api/user/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  
+  next();
+};
+
+app.use(additionalSecurityHeaders);
 
 // Initialize database
 initDatabase();
@@ -165,10 +322,8 @@ function getCurrentUserFromToken(req) {
 function requireAuth(req, res, next) {
   const user = getCurrentUserFromToken(req);
   if (!user) {
-    console.log('[DEBUG] Auth failed for:', req.path);
     return res.status(401).json({ error: 'Authentication required' });
   }
-  console.log(`[DEBUG] Auth success for user ${user.id} on ${req.path}`);
   req.user = user;
   next();
 }
@@ -598,7 +753,6 @@ app.get('/api/user/wallet', requireAuth, (req, res) => {
     // Get user-specific balances - Always read from database to ensure latest updates
     // FORCE database read, ignore cached user.balances from JSON file
     const balances = dbOps.getUserBalances.all(user.id);
-    console.log(`[DEBUG] User ${user.id} balances from DB:`, balances);
     
     // Calculate total USD value
     const rates = { 
@@ -688,7 +842,6 @@ app.post('/api/user/generate-wallets', requireAuth, (req, res) => {
 
     const { generateUserWallets, encryptPrivateKey } = require('./services/walletGenerator');
     
-    console.log(`Generating wallets for user ${user.id}...`);
     
     // Ensure user exists in database (only for numeric user IDs)
     if (typeof user.id === 'number') {
@@ -703,10 +856,8 @@ app.post('/api/user/generate-wallets', requireAuth, (req, res) => {
           String(new Date().toISOString())
         );
       } catch (error) {
-        console.log(`User ${user.id} already exists in database or other error:`, error.message);
       }
     } else {
-      console.log(`Skipping database sync for demo user: ${user.id}`);
     }
     
     const wallets = generateUserWallets(user.id);
@@ -717,7 +868,6 @@ app.post('/api/user/generate-wallets', requireAuth, (req, res) => {
       { network: 'solana', currency: 'SOL', address: wallets.sol.address, public_key: wallets.sol.publicKey, is_active: 1, created_at: new Date().toISOString() },
       { network: 'bitcoin', currency: 'BTC', address: wallets.btc.address, public_key: wallets.btc.publicKey, is_active: 1, created_at: new Date().toISOString() }
     ];
-    console.log(`Wallets created for user ${user.id}`);
     res.json({ message: 'Wallets created successfully', wallets: userWallets });
     
   } catch (error) {
@@ -930,10 +1080,8 @@ function ensureUserBalances(user) {
         dbOps.insertBalance.run(user.id, currency, 0, 0);
       });
       
-      console.log(`Initialized database balances for user ${user.id} with ${usdBalance} USD`);
     } catch (dbError) {
       // Balances might already exist, which is fine
-      console.log(`Database balances already exist for user ${user.id}`);
     }
   } catch (error) {
     console.error('Error ensuring user balances:', error);

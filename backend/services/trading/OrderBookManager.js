@@ -287,7 +287,6 @@ class OrderBookManager {
           quoteCurrency
         );
         
-        console.log(`Updated buyer ${trade.buyUserId} balances: +${trade.quantity} ${baseCurrency}, -${trade.total} ${quoteCurrency}`);
       } catch (error) {
         console.error(`Error updating buyer balances for ${trade.buyUserId}:`, error);
       }
@@ -324,7 +323,6 @@ class OrderBookManager {
           quoteCurrency
         );
         
-        console.log(`Updated seller ${trade.sellUserId} balances: -${trade.quantity} ${baseCurrency}, +${trade.total} ${quoteCurrency}`);
       } catch (error) {
         console.error(`Error updating seller balances for ${trade.sellUserId}:`, error);
       }

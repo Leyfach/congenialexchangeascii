@@ -62,9 +62,7 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
 
   const fetchWalletBalances = async () => {
     try {
-      console.log('[DEBUG] Fetching wallet balances...')
       const { data } = await api.get('/api/user/wallet')
-      console.log('[DEBUG] Received wallet data:', data)
       // Convert array of balances to object for easier lookup
       const walletsObj = {}
       if (data.balances && Array.isArray(data.balances)) {
@@ -72,7 +70,6 @@ export default function OrderForm({ pair = 'BTC/USD', onPairChange }) {
           walletsObj[item.currency] = parseFloat(item.balance) || 0
         })
       }
-      console.log('[DEBUG] Processed wallets:', walletsObj)
       setWallets(walletsObj)
     } catch (error) {
       console.error('Error fetching wallet balances:', error)

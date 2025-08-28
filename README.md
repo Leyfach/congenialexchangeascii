@@ -1,4 +1,5 @@
 # Simple Crypto Exchange
+<img width="701" height="131" alt="{473B8A1F-0BBF-4152-A781-25A18CDAFE34}" src="https://github.com/user-attachments/assets/ea4572cd-eb3b-471d-a63c-20b865a0b6a8" />
 
 Educational crypto exchange for portfolio and thesis work. Uses PostgreSQL for storage, Node.js/Express for REST API, and React for frontend.
 

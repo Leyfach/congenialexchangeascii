@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { DatabaseOperations } = require('./database/operations');
+const { authenticateToken, optionalAuth } = require('./shared/middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,80 @@ async function initServer() {
 
 app.get('/', (req, res) => {
   res.json({ message: 'Crypto Exchange API with PostgreSQL is running!' });
+});
+
+// Authentication endpoints
+const bcrypt = require('bcryptjs');
+const { generateToken, hashPassword, comparePassword } = require('./services/auth/auth');
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, username } = req.body;
+    
+    if (!email || !password || !username) {
+      return res.status(400).json({ error: 'Email, password, and username are required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await db.getUserByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({ error: 'User with this email already exists' });
+    }
+
+    // Hash password and create user
+    const hashedPassword = await hashPassword(password);
+    const userId = await db.createUser(email, username, hashedPassword);
+    
+    // Generate JWT token
+    const token = generateToken(userId);
+    
+    res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      userId,
+      token,
+      user: { id: userId, email, username }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    const user = await db.getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Verify password
+    const isValidPassword = await comparePassword(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const token = generateToken(user.id);
+    
+    res.json({
+      success: true,
+      message: 'Login successful',
+      userId: user.id,
+      token,
+      user: { id: user.id, email: user.email, username: user.username }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
 });
 
 app.get('/api/markets', (req, res) => {
@@ -152,12 +227,9 @@ app.get('/api/markets/:pair/orderbook', (req, res) => {
 });
 
 // User endpoints
-app.get('/api/user/profile', async (req, res) => {
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     res.json({
       id: user.id,
@@ -172,12 +244,9 @@ app.get('/api/user/profile', async (req, res) => {
   }
 });
 
-app.get('/api/user/wallet', async (req, res) => {
+app.get('/api/user/wallet', authenticateToken, async (req, res) => {
   try {
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const balances = await db.getUserBalances(user.id);
     
@@ -210,12 +279,9 @@ app.get('/api/user/wallet', async (req, res) => {
   }
 });
 
-app.get('/api/user/trades', async (req, res) => {
+app.get('/api/user/trades', authenticateToken, async (req, res) => {
   try {
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const trades = await db.getUserTrades(user.id);
     
@@ -236,12 +302,9 @@ app.get('/api/user/trades', async (req, res) => {
 });
 
 // Get user wallets (deposit addresses)
-app.get('/api/user/wallets', async (req, res) => {
+app.get('/api/user/wallets', authenticateToken, async (req, res) => {
   try {
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const wallets = await db.getUserWallets(user.id);
     res.json({ wallets });
@@ -252,13 +315,10 @@ app.get('/api/user/wallets', async (req, res) => {
 });
 
 // Get wallet with private key (for admin/developer purposes only)
-app.get('/api/user/wallets/:network/:currency/details', async (req, res) => {
+app.get('/api/user/wallets/:network/:currency/details', authenticateToken, async (req, res) => {
   try {
     const { network, currency } = req.params;
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const wallet = await db.getWalletWithPrivateKey(user.id, network, currency);
     if (!wallet) {
@@ -282,12 +342,9 @@ app.get('/api/user/wallets/:network/:currency/details', async (req, res) => {
 });
 
 // Get user deposits
-app.get('/api/user/deposits', async (req, res) => {
+app.get('/api/user/deposits', authenticateToken, async (req, res) => {
   try {
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const deposits = await db.getUserDeposits(user.id);
     res.json(deposits);
@@ -298,12 +355,9 @@ app.get('/api/user/deposits', async (req, res) => {
 });
 
 // Get user withdrawals
-app.get('/api/user/withdrawals', async (req, res) => {
+app.get('/api/user/withdrawals', authenticateToken, async (req, res) => {
   try {
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
     
     const withdrawals = await db.getUserWithdrawals(user.id);
     res.json(withdrawals);
@@ -314,12 +368,9 @@ app.get('/api/user/withdrawals', async (req, res) => {
 });
 
 // Create wallets for user
-app.post('/api/user/generate-wallets', async (req, res) => {
+app.post('/api/user/generate-wallets', authenticateToken, async (req, res) => {
   try {
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = req.user;
 
     // Check if wallets already exist
     const existingWallets = await db.getUserWallets(user.id);
@@ -372,7 +423,7 @@ app.post('/api/user/generate-wallets', async (req, res) => {
 });
 
 // Orders endpoint with PostgreSQL
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', authenticateToken, async (req, res) => {
   const { pair, side, quantity, type, price } = req.body;
   
   try {
@@ -385,11 +436,8 @@ app.post('/api/orders', async (req, res) => {
       return res.status(400).json({ error: 'Price is required for limit orders' });
     }
     
-    // Get user
-    const user = await db.getUserByEmail('demo@example.com');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    // Get user from auth middleware
+    const user = req.user;
     
     // Use realistic prices based on pair
     const basePrices = { 

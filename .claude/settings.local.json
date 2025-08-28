@@ -17,9 +17,16 @@
       "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" -U postgres -c \"SELECT ''connection test'';\")",
       "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\createdb.exe\" -U postgres crypto_exchange)",
       "Bash(npm run:*)",
-      "Bash(tasklist:*)"
+      "Bash(tasklist:*)",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" -U postgres -h localhost -c \"\\l\")",
+      "Bash(grep:*)",
+      "Bash(sqlite3:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\prada\\Desktop\\exchange"
+    ]
   }
 }

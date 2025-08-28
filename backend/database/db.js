@@ -250,6 +250,11 @@ function initDatabase() {
     WHERE user_id = ? AND currency = ?
   `);
   
+  dbOps.insertBalance = db.prepare(`
+    INSERT OR IGNORE INTO user_balances (user_id, currency, balance, available)
+    VALUES (?, ?, ?, ?)
+  `);
+  
   dbOps.createOrder = db.prepare(`
     INSERT INTO orders (user_id, order_id, pair, side, type, quantity, price, status, filled_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

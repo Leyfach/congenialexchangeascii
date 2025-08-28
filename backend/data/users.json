@@ -499,7 +499,39 @@
           "locked": 0.042658119965497794
         }
       }
+    },
+    {
+      "id": 21,
+      "email": "jlngdfklnhdfk@mail.ru",
+      "password": "$2a$10$VUv1DZexBGuQODhGmfn5tOLJJGyff96Wb4ZOVSRyEmauyYcerbtIe",
+      "firstName": "bob",
+      "lastName": "johnson",
+      "accountType": "basic",
+      "token": "user-token-21-1756383813924",
+      "created": "2025-08-28T12:23:34.003Z",
+      "balances": {
+        "USD": {
+          "balance": 1000,
+          "available": 900,
+          "locked": 100
+        },
+        "BTC": {
+          "balance": 0.0011919211182025325,
+          "available": 0.001032021210095023,
+          "locked": 0.000026203731150785305
+        },
+        "ETH": {
+          "balance": 0.011889952511757333,
+          "available": 0.01149092531345966,
+          "locked": 0.000891406106910853
+        },
+        "SOL": {
+          "balance": 1.1176122787818241,
+          "available": 1.0554936919569087,
+          "locked": 0.2095490677423784
+        }
+      }
     }
   ],
-  "currentUserId": 21
+  "currentUserId": 22
 }

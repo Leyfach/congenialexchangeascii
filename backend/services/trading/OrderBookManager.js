@@ -144,8 +144,8 @@ class OrderBookManager {
         const bestBid = orderBook.bids[0];
         const tradeQuantity = Math.min(remainingQuantity, bestBid.quantity);
         
-        // Execute trade
-        const trade = this.executeTrade(order, bestBid, tradeQuantity, bestBid.price);
+        // Execute trade - order is sell, bestBid is buy
+        const trade = this.executeTrade(bestBid, order, tradeQuantity, bestBid.price);
         trades.push(trade);
         
         remainingQuantity -= tradeQuantity;
@@ -264,11 +264,11 @@ class OrderBookManager {
         
         // Initialize balances if they don't exist
         if (!baseBalance) {
-          dbOps.updateBalance.run(0, 0, trade.buyUserId, baseCurrency);
+          dbOps.insertBalance.run(trade.buyUserId, baseCurrency, 0, 0);
           baseBalance = { balance: 0, available: 0 };
         }
         if (!quoteBalance) {
-          dbOps.updateBalance.run(0, 0, trade.buyUserId, quoteCurrency);
+          dbOps.insertBalance.run(trade.buyUserId, quoteCurrency, 0, 0);
           quoteBalance = { balance: 0, available: 0 };
         }
         
@@ -301,11 +301,11 @@ class OrderBookManager {
         
         // Initialize balances if they don't exist
         if (!baseBalance) {
-          dbOps.updateBalance.run(0, 0, trade.sellUserId, baseCurrency);
+          dbOps.insertBalance.run(trade.sellUserId, baseCurrency, 0, 0);
           baseBalance = { balance: 0, available: 0 };
         }
         if (!quoteBalance) {
-          dbOps.updateBalance.run(0, 0, trade.sellUserId, quoteCurrency);
+          dbOps.insertBalance.run(trade.sellUserId, quoteCurrency, 0, 0);
           quoteBalance = { balance: 0, available: 0 };
         }
         
@@ -387,7 +387,29 @@ class OrderBookManager {
         
         // Record the trade - use the buyer's ID for the trade record
         const tradeUserId = !trade.buyUserId.includes('demo_user') ? trade.buyUserId : trade.sellUserId;
-        const tradeOrderId = buyOrderRowId || sellOrderRowId || 1; // Fallback to 1 if no order ID
+        let tradeOrderId = buyOrderRowId || sellOrderRowId;
+        
+        // If no valid order ID, create a temporary order entry for the trade
+        if (!tradeOrderId) {
+          try {
+            const tempOrderId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const result = dbOps.createOrder.run(
+              tradeUserId,
+              tempOrderId,
+              trade.pair,
+              !trade.buyUserId.includes('demo_user') ? 'buy' : 'sell',
+              'market',
+              trade.quantity,
+              trade.price,
+              'filled',
+              new Date().toISOString()
+            );
+            tradeOrderId = result.lastInsertRowid;
+          } catch (error) {
+            console.error('Failed to create temporary order for trade:', error);
+            return; // Skip trade recording if we can't create the order
+          }
+        }
         
         dbOps.createTrade.run(
           tradeUserId,

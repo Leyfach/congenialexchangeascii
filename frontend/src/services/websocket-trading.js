@@ -14,7 +14,7 @@ class TradingWebSocket {
     try {
       // Use ws:// for local development, wss:// for production
       // Frontend runs on 5173, backend on 3001, so connect directly to backend
-      const wsUrl = `ws://localhost:3001`;
+      const wsUrl = `ws://localhost:3000`;
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {

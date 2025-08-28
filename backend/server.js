@@ -41,7 +41,7 @@ const authLimiter = rateLimit({
 
 // CORS configuration for development
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -165,8 +165,10 @@ function getCurrentUserFromToken(req) {
 function requireAuth(req, res, next) {
   const user = getCurrentUserFromToken(req);
   if (!user) {
+    console.log('[DEBUG] Auth failed for:', req.path);
     return res.status(401).json({ error: 'Authentication required' });
   }
+  console.log(`[DEBUG] Auth success for user ${user.id} on ${req.path}`);
   req.user = user;
   next();
 }
@@ -593,20 +595,10 @@ app.get('/api/user/wallet', requireAuth, (req, res) => {
       ensureUserBalances(user);
     }
     
-    // Get user-specific balances
-    let balances;
-    if (user.balances) {
-      // Convert user.balances object to array format
-      balances = Object.entries(user.balances).map(([currency, data]) => ({
-        currency,
-        balance: data.balance,
-        available: data.available,
-        locked: data.locked
-      }));
-    } else {
-      // Fallback to database
-      balances = dbOps.getUserBalances.all(user.id);
-    }
+    // Get user-specific balances - Always read from database to ensure latest updates
+    // FORCE database read, ignore cached user.balances from JSON file
+    const balances = dbOps.getUserBalances.all(user.id);
+    console.log(`[DEBUG] User ${user.id} balances from DB:`, balances);
     
     // Calculate total USD value
     const rates = { 
@@ -927,7 +919,22 @@ function ensureUserBalances(user) {
     user.balances = balances;
     saveUsers({ users, currentUserId });
     
-    // Note: Database balance operations are handled elsewhere
+    // Also create initial database balances for the user
+    try {
+      // Insert USD balance first (most important for trading)
+      dbOps.insertBalance.run(user.id, 'USD', usdBalance, usdBalance);
+      
+      // Insert zero balances for other major currencies to avoid initialization issues
+      const currencies = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'LINK', 'AVAX', 'MATIC'];
+      currencies.forEach(currency => {
+        dbOps.insertBalance.run(user.id, currency, 0, 0);
+      });
+      
+      console.log(`Initialized database balances for user ${user.id} with ${usdBalance} USD`);
+    } catch (dbError) {
+      // Balances might already exist, which is fine
+      console.log(`Database balances already exist for user ${user.id}`);
+    }
   } catch (error) {
     console.error('Error ensuring user balances:', error);
   }

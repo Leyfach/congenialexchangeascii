@@ -21,7 +21,8 @@
       "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" -U postgres -h localhost -c \"\\l\")",
       "Bash(grep:*)",
       "Bash(sqlite3:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": [],

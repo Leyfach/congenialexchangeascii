@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: crypto-exchange
+  labels:
+    app: crypto-exchange
+    environment: production
